@@ -313,3 +313,146 @@ body {
     height: auto;
   }
 }
+
+
+/* Horizontal dashboard: simulator, HUD and controls share the available width. */
+#app {
+  max-width: 1800px;
+  width: 100%;
+}
+
+.simulation-container {
+  flex-direction: column;
+  align-items: center;
+  gap: 12px;
+  width: 100%;
+  margin-bottom: 12px;
+}
+
+#simCanvas {
+  display: block;
+  max-width: 100%;
+  height: auto;
+}
+
+.hud {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  width: 100%;
+  min-width: 0;
+  gap: 16px;
+  padding: 12px 16px;
+}
+
+.hud-section,
+.hud-section:last-child {
+  margin: 0;
+  padding: 0;
+  border: 0;
+  min-width: 0;
+}
+
+.hud-section h3 {
+  margin-bottom: 8px;
+}
+
+.hud-row {
+  gap: 8px;
+  margin-bottom: 4px;
+}
+
+.controls {
+  width: 100%;
+  justify-content: flex-start;
+  gap: 10px;
+  padding: 10px 14px;
+  margin-bottom: 10px;
+  border-radius: 8px;
+  background: rgba(0, 10, 20, 0.35);
+  border: 1px solid rgba(0, 229, 255, 0.12);
+}
+
+.controls button,
+.save-controls button,
+.save-controls .file-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 38px;
+  padding: 8px 14px;
+  font-size: 12px;
+  line-height: 1.25;
+  white-space: nowrap;
+}
+
+.controls button.btn-small {
+  min-height: 38px;
+  padding: 8px 12px;
+}
+
+.control-group {
+  flex-direction: row;
+  justify-content: center;
+  gap: 8px;
+  min-height: 38px;
+}
+
+.control-group label {
+  white-space: nowrap;
+}
+
+.control-group select {
+  min-height: 36px;
+}
+
+.checkbox-label {
+  min-height: 38px;
+  white-space: nowrap;
+}
+
+.mode-indicator {
+  min-width: 0;
+  white-space: nowrap;
+}
+
+.route-controls,
+.avoid-controls {
+  margin-bottom: 10px;
+}
+
+.save-controls {
+  margin-top: 0;
+}
+
+.progress-container {
+  max-width: 100%;
+  margin: 0 0 12px;
+  padding: 0 12px;
+}
+
+.instructions {
+  max-width: 1100px;
+  text-align: left;
+  margin: 16px auto;
+}
+
+.instructions p {
+  margin-bottom: 8px;
+}
+
+@media (max-width: 1100px) {
+  .hud { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .controls { gap: 8px; }
+  .control-group { flex-wrap: wrap; }
+}
+
+@media (max-width: 650px) {
+  #app { padding: 10px; }
+  .hud { grid-template-columns: 1fr; gap: 10px; }
+  .hud-section { border-bottom: 1px solid rgba(0, 255, 255, 0.1); padding-bottom: 10px; }
+  .hud-section:last-child { border-bottom: 0; padding-bottom: 0; }
+  .controls { justify-content: center; padding: 10px; }
+  .controls button, .save-controls button, .save-controls .file-btn { white-space: normal; }
+  .control-group { flex-direction: column; }
+  .checkbox-label, .mode-indicator { white-space: normal; }
+}

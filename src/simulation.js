@@ -79,7 +79,7 @@ export class Simulation {
     let startX, startY;
     let attempts = 0;
     do {
-      startX = 40 + rng() * (this.width - 80);
+      startX = 40 + rng() * Math.max(1, this.entryX - 80);
       startY = 40 + rng() * (this.height - 80);
       attempts++;
     } while (this.isOverIsland(startX, startY) && attempts < 100);
@@ -284,14 +284,19 @@ export class Simulation {
     
     this.prevDist = currDist;
     
+    const previousPosition = {x:this.boat.x, y:this.boat.y};
     this.boat.update(dt, rudder);
+    this.checkWaypoints(previousPosition);
   }
   
-  checkWaypoints() {
+  checkWaypoints(previousPosition = null) {
     if (this.currentWaypointIndex >= this.waypoints.length) return;
     
     const wp = this.waypoints[this.currentWaypointIndex];
-    const dist = Math.hypot(this.boat.x - wp.x, this.boat.y - wp.y);
+    const ax=previousPosition?.x ?? this.boat.x, ay=previousPosition?.y ?? this.boat.y;
+    const dx=this.boat.x-ax, dy=this.boat.y-ay, d2=dx*dx+dy*dy;
+    const t=d2 ? Math.max(0,Math.min(1,((wp.x-ax)*dx+(wp.y-ay)*dy)/d2)) : 0;
+    const dist=Math.hypot(ax+t*dx-wp.x, ay+t*dy-wp.y);
     
     if (dist <= this.waypointRadius) {
       wp.passed = true;
@@ -522,6 +527,32 @@ export class Simulation {
     }
   }
   
+  // Repeatable diagnostics on the same set of scenarios (independent of training state).
+  benchmark(network = this.bestNetwork || this.nn, seeds=Array.from({length:20},(_,i)=>1001+i)) {
+    const sim = new Simulation(this.width,this.height);
+    sim.aiEnabled=true;
+    sim.clearWaypoints(); sim.clearAvoidZones();
+    const runs=[];
+    for (const seed of seeds) {
+      sim.reset(network,false);
+      sim.randomizeLayout(mulberry32(seed));
+      const layout={islandX:sim.islandX,islandY:sim.islandY,islandW:sim.islandW,
+        islandH:sim.islandH,gateY:sim.gateY,gateWidth:sim.gateWidth,entryX:sim.entryX};
+      const trail=[{x:sim.boat.x,y:sim.boat.y}];
+      let steps=0;
+      while(!sim.finished && sim.time<sim.maxTime) {
+        sim.update(0.05);
+        if(++steps%10===0)trail.push({x:sim.boat.x,y:sim.boat.y});
+      }
+      const success=sim.finished && sim.checkDockEntry();
+      runs.push({seed,success,score:sim.score,time:sim.time,layout,trail});
+    }
+    const successes=runs.filter(r=>r.success).length;
+    return {runs,summary:{total:runs.length,successes,failures:runs.length-successes,
+      successRate:runs.length?successes/runs.length:0,
+      averageScore:runs.length?runs.reduce((sum,r)=>sum+r.score,0)/runs.length:0}};
+  }
+
   computeGenerationStats() {
     const n = this.population.length || 1;
     const meanScore = this.population.reduce((a, p) => a + p.score, 0) / n;

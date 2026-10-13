@@ -1,0 +1,73 @@
+<!doctype html>
+<html lang="ru"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Boat Dock AI — диагностика</title>
+<style>
+body{font:16px system-ui;background:#10202e;color:#eff9ff;max-width:1000px;margin:25px auto;padding:0 20px}
+p{color:#b0c8d6}button,input{padding:10px;background:#23435a;border:1px solid #61879d;color:white;border-radius:8px}
+.controls{display:flex;gap:12px;align-items:center;flex-wrap:wrap;margin:18px 0}
+.metrics{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:10px}
+.metrics div{padding:14px;background:#234052;border-radius:10px}.metrics b{display:block;font-size:28px}
+#cases{display:flex;gap:5px;flex-wrap:wrap;margin:14px 0}
+#cases button{min-width:33px;padding:7px}.ok{background:#186e4a}.bad{background:#9c424b}
+canvas{width:100%;background:#132b3a;border:1px solid #53788d}
+@media(max-width:600px){.metrics{grid-template-columns:repeat(2,minmax(0,1fr))}}
+</style></head><body>
+<h1>Проверка обученной лодки</h1><p>20 одинаковых воспроизводимых маршрутов (seed 1001–1020). Обучение при тесте не меняется.</p>
+<div class="controls"><input type="file" id="brain" accept=".json"><button id="run">Проверить 20 сценариев</button><span id="status">Модель из браузера или новая</span></div>
+<div class="metrics"><div>Успешность<b id="rate">—</b></div><div>Успехи<b id="ok">—</b></div><div>Неудачи<b id="bad">—</b></div><div>Средний score<b id="score">—</b></div></div>
+<h2>Результаты попыток</h2><div id="cases"></div>
+<h2 id="title">Траектория</h2><canvas id="map" width="900" height="500"></canvas>
+<p>Нажмите на номер попытки: зелёный — успех, красный — неудача. Карты без дополнительных препятствий и waypoint. Для сравнения поколений импортируйте разные JSON и запускайте повторно.</p>
+<script type="module">
+import { Simulation } from './src/simulation.js';
+import { NeuralNetwork } from './src/neuralNetwork.js';
+const sim=new Simulation(1800,1000), $=id=>document.getElementById(id);
+let net=sim.bestNetwork||sim.nn;
+$('brain').onchange=async e=>{
+  const f=e.target.files[0];if(!f)return;
+  try{
+    const data=(o=>o.network||o)(JSON.parse(await f.text()));
+    if(data.outputSize!==1||![4,6].includes(data.inputSize)||data.hiddenSize!==8||
+      !Array.isArray(data.weightsIH)||data.weightsIH.length!==8||
+      data.weightsIH.some(row=>!Array.isArray(row)||row.length!==data.inputSize)||
+      !Array.isArray(data.weightsHO)||data.weightsHO.length!==1||data.weightsHO[0]?.length!==8||
+      !Array.isArray(data.biasH)||data.biasH.length!==8||
+      !Array.isArray(data.biasO)||data.biasO.length!==1||
+      [...data.weightsIH.flat(),...data.weightsHO.flat(),...data.biasH,...data.biasO].some(v=>typeof v!=='number'||!Number.isFinite(v))
+    )throw Error('неподходящий JSON мозга');
+    net=NeuralNetwork.fromJSON(data);
+    if(net.inputSize===4)net=net.migrateInputSize(6);
+    $('status').textContent='Загружено: '+f.name;
+  }catch(err){$('status').textContent='Ошибка: '+err.message}
+};
+function draw(r){
+  const c=$('map').getContext('2d'),L=r.layout,s=.5;
+  c.clearRect(0,0,900,500);c.fillStyle='#708b9c';
+  c.fillRect(L.islandX*s,L.islandY*s,L.islandW*s,(L.gateY-L.gateWidth/2-L.islandY)*s);
+  const low=L.gateY+L.gateWidth/2;
+  c.fillRect(L.islandX*s,low*s,L.islandW*s,(L.islandY+L.islandH-low)*s);
+  c.beginPath();c.strokeStyle='#ffdd86';c.setLineDash([4,4]);
+  c.moveTo(L.entryX*s,(L.gateY-L.gateWidth/2)*s);
+  c.lineTo(L.entryX*s,(L.gateY+L.gateWidth/2)*s);c.stroke();c.setLineDash([]);
+  c.beginPath();c.strokeStyle=r.success?'#48e7a5':'#ff7a83';c.lineWidth=3;
+  r.trail.forEach((p,i)=>i?c.lineTo(p.x*s,p.y*s):c.moveTo(p.x*s,p.y*s));c.stroke();
+  $('title').textContent='Маршрут '+r.seed+' — '+(r.success?'успех':'неудача')+', score '+r.score.toFixed(0);
+}
+$('run').onclick=()=>{
+  $('run').disabled=true;$('status').textContent='Выполняется проверка…';
+  requestAnimationFrame(()=>setTimeout(()=>{
+    try{
+      const {runs,summary}=sim.benchmark(net);
+      $('rate').textContent=(summary.successRate*100).toFixed(0)+'%';
+      $('ok').textContent=summary.successes+'/'+summary.total;
+      $('bad').textContent=summary.failures;
+      $('score').textContent=summary.averageScore.toFixed(0);
+      $('cases').replaceChildren();
+      runs.forEach((r,i)=>{const b=document.createElement('button');b.textContent=i+1;
+        b.className=r.success?'ok':'bad';b.onclick=()=>draw(r);$('cases').append(b)});
+      draw(runs[0]);$('status').textContent='Готово';
+    }catch(err){$('status').textContent='Ошибка: '+err.message}
+    finally{$('run').disabled=false}
+  },0));
+};
+</script></body></html>

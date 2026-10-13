@@ -1,0 +1,184 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Лодка + ИИ — Вход в док</title>
+  <link rel="stylesheet" href="./src/style.css" />
+</head>
+<body>
+  <div id="app">
+    <div class="simulation-container">
+      <canvas id="simCanvas"></canvas>
+      
+      <div class="hud">
+        <div class="hud-section">
+          <h3>📊 Параметры движения</h3>
+          <div class="hud-row">
+            <span class="label">Скорость:</span>
+            <span class="value" id="hud-speed">0</span> пкс/с
+          </div>
+          <div class="hud-row">
+            <span class="label">Курс:</span>
+            <span class="value" id="hud-heading">0</span>°
+          </div>
+          <div class="hud-row">
+            <span class="label">Поворот (руль):</span>
+            <span class="value" id="hud-rudder">0</span>°
+          </div>
+          <div class="hud-row">
+            <span class="label">Награда:</span>
+            <span class="value" id="hud-score">0</span>
+          </div>
+        </div>
+        
+        <div class="hud-section">
+          <h3>🧠 Входы сети</h3>
+          <div class="hud-row">
+            <span class="label">dist:</span>
+            <span class="value" id="hud-input-dist">0</span>
+          </div>
+          <div class="hud-row">
+            <span class="label">angle:</span>
+            <span class="value" id="hud-input-angle">0</span>
+          </div>
+          <div class="hud-row">
+            <span class="label">sin(h):</span>
+            <span class="value" id="hud-input-sin">0</span>
+          </div>
+          <div class="hud-row">
+            <span class="label">cos(h):</span>
+            <span class="value" id="hud-input-cos">0</span>
+          </div>
+          <div class="hud-row">
+            <span class="label">avoid_dist:</span>
+            <span class="value" id="hud-input-avoid-dist">0</span>
+          </div>
+          <div class="hud-row">
+            <span class="label">avoid_angle:</span>
+            <span class="value" id="hud-input-avoid-angle">0</span>
+          </div>
+          <div class="hud-row">
+            <span class="label">→ руль:</span>
+            <span class="value" id="hud-output-rudder">0</span>
+          </div>
+          <div class="hud-row">
+            <span class="label">Осталось времени:</span>
+            <span class="value" id="hud-lifetime">100</span>с
+          </div>
+        </div>
+        
+        <div class="hud-section">
+          <h3>🧬 Нейросеть</h3>
+          <div class="hud-row">
+            <span class="label">Поколение:</span>
+            <span class="value" id="hud-generation">1</span>
+          </div>
+          <div class="hud-row">
+            <span class="label">Лучший скор:</span>
+            <span class="value" id="hud-best-score">0</span>
+          </div>
+          <div class="hud-row">
+            <span class="label">Сохранение:</span>
+            <span class="value" id="hud-save-status">—</span>
+          </div>
+        </div>
+      </div>
+    </div>
+    
+    <div class="controls">
+      <button id="btn-reset">🔄 Сбросить</button>
+      <button id="btn-toggle-ai">🤖 Вкл/Выкл ИИ</button>
+      <button id="btn-train">🏋️ Обучать непрерывно</button>
+      <button id="btn-mutate">🧬 Мутировать</button>
+      <div class="control-group">
+        <label>Скорость симуляции: <span id="speed-val">1</span>x</label>
+        <input type="range" id="sim-speed" min="0.1" max="5" step="0.1" value="1" />
+      </div>
+    </div>
+    
+    <!-- Stage 2.1: Waypoints -->
+    <div class="controls route-controls">
+      <button id="btn-waypoint-mode">📍 Маршрут</button>
+      <div class="control-group">
+        <label>Количество точек</label>
+        <select id="waypoint-count">
+          <option value="1">1</option>
+          <option value="2">2</option>
+          <option value="3" selected>3</option>
+          <option value="4">4</option>
+          <option value="5">5</option>
+        </select>
+      </div>
+      <label class="checkbox-label">
+        <input type="checkbox" id="chk-random-waypoints" />
+        <span>расставить случайно</span>
+      </label>
+      <span class="mode-indicator" id="waypoint-indicator">Режим: выкл</span>
+      <button id="btn-clear-waypoints" class="btn-small">🗑 Очистить</button>
+    </div>
+    
+    <!-- Stage 2.1: Avoid zones -->
+    <div class="controls avoid-controls">
+      <button id="btn-avoid-mode">🚫 Запреты</button>
+      <div class="control-group">
+        <label>Радиус</label>
+        <select id="avoid-radius">
+          <option value="10">10 px</option>
+          <option value="20" selected>20 px</option>
+          <option value="30">30 px</option>
+        </select>
+      </div>
+      <div class="control-group">
+        <label>Количество</label>
+        <select id="avoid-count">
+          <option value="1">1</option>
+          <option value="2" selected>2</option>
+          <option value="3">3</option>
+          <option value="4">4</option>
+          <option value="5">5</option>
+          <option value="6">6</option>
+          <option value="7">7</option>
+          <option value="8">8</option>
+          <option value="9">9</option>
+          <option value="10">10</option>
+          <option value="11">11</option>
+          <option value="12">12</option>
+          <option value="13">13</option>
+          <option value="14">14</option>
+          <option value="15">15</option>
+        </select>
+      </div>
+      <span class="mode-indicator" id="avoid-indicator">Режим: выкл</span>
+      <button id="btn-clear-avoid" class="btn-small">🗑 Очистить</button>
+    </div>
+    
+    <div class="progress-container" id="progress-container" style="display:none;">
+      <div class="progress-bar">
+        <div class="progress-fill" id="progress-fill"></div>
+      </div>
+      <div class="progress-text" id="progress-text">Поколение 0 — особь 0/50 — скор: 0</div>
+    </div>
+    
+    <div class="controls save-controls">
+      <button id="btn-save">💾 Сохранить мозг</button>
+      <button id="btn-load">📂 Загрузить мозг</button>
+      <button id="btn-export">📤 Экспорт JSON</button>
+      <label class="file-btn">
+        📥 Импорт JSON
+        <input type="file" id="btn-import" accept=".json" />
+      </label>
+    </div>
+    
+    <div class="instructions">
+      <p><strong>Нейросеть управляет рулём</strong> (лево/право). Скорость постоянная. Цель — войти в док.</p>
+      <p><strong>Каждый сброс</strong> — новое случайное положение старта (курс 0–360°) и дока. Неудача → автоперезапуск.</p>
+      <p><strong>Обучение непрерывное:</strong> нажми «Обучать непрерывно» — модель учится в фоне. Каждые 10 поколений лучшая сеть загружается в лодку. Стоп — чтобы остановить.</p>
+      <p><strong>Маршрут:</strong> нажми «Маршрут» → кликай на поле для установки зелёных точек. Лодка обязана пройти их по порядку. Повторный клик по точке — удаляет её. Или включи «расставить случайно» — точки сгенерируются автоматически при каждом сбросе.</p>
+      <p><strong>Запреты:</strong> нажми «Запреты» → кликай на поле для установки красных зон. Лодка должна их обходить. Попадание = незачёт.</p>
+    </div>
+  </div>
+  
+  <script type="module" src="./src/main.js"></script>
+</body>
+</html>

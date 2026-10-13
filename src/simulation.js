@@ -1,0 +1,588 @@
+import { Boat } from './boat.js';
+import { NeuralNetwork } from './neuralNetwork.js';
+
+export class Simulation {
+  constructor(width, height) {
+    this.width = width;
+    this.height = height;
+    
+    this.boat = new Boat(0, 0);
+    
+    // 1 выход — только руль. Входы: dist, angle, sin(h), cos(h), avoid_dist, avoid_angle
+    this.nn = new NeuralNetwork(6, 8, 1);
+    this.aiEnabled = true;
+    
+    this.generation = 1;
+    this.bestScore = -Infinity;
+    this.bestNetwork = null;
+    this.population = [];
+    this.populationSize = 50;
+    
+    this.running = true;
+    this.finished = false;
+    this.score = 0;
+    this.time = 0;
+    this.maxTime = 200;
+    this.trainingActive = false;
+    
+    this.entryChecked = false;
+    this.entrySuccess = false;
+    this.prevDist = null;
+    this.prevEntryDist = null;
+    
+    // Параметры острова
+    this.islandX = 0;
+    this.islandY = 0;
+    this.islandW = 0;
+    this.islandH = 0;
+    this.gateY = 0;
+    this.gateWidth = 24;
+    this.entryX = 0;
+    
+    // === Stage 2.1: Waypoints (обязательные точки маршрута) ===
+    this.waypoints = []; // [{x, y, passed}]
+    this.currentWaypointIndex = 0;
+    this.waypointRadius = 3;
+    this.waypointBonus = 1000;
+    
+    // === Stage 2.1: Avoid zones (точки обхода) ===
+    this.avoidZones = []; // [{x, y, radius}]
+    this.avoidPenalty = 1000;
+    
+    this.randomizeLayout();
+    this.loadBestBrain();
+  }
+  
+  randomizeLayout() {
+    this.islandW = 120 + Math.random() * 80;
+    this.islandH = 180 + Math.random() * 120;
+    this.islandX = this.width - this.islandW + 20;
+    this.islandY = 40 + Math.random() * (this.height - this.islandH - 80);
+    
+    this.gateWidth = this.boat.width * 3.5;
+    this.gateY = this.islandY + 30 + Math.random() * (this.islandH - 60);
+    
+    this.entryX = this.islandX - 60;
+    
+    let startX, startY;
+    let attempts = 0;
+    do {
+      startX = 40 + Math.random() * (this.width - 80);
+      startY = 40 + Math.random() * (this.height - 80);
+      attempts++;
+    } while (this.isOverIsland(startX, startY) && attempts < 100);
+    
+    const startHeading = Math.random() * Math.PI * 2;
+    
+    this.boat.reset(startX, startY);
+    this.boat.heading = startHeading;
+    this.boat.trail = [];
+    
+    this.currentWaypointIndex = 0;
+    this.waypoints.forEach(wp => wp.passed = false);
+  }
+  
+  // === Waypoints ===
+  addWaypoint(x, y) {
+    this.waypoints.push({ x, y, passed: false });
+  }
+  
+  removeWaypointAt(x, y) {
+    const idx = this.findWaypointAt(x, y);
+    if (idx >= 0) {
+      this.waypoints.splice(idx, 1);
+      this.currentWaypointIndex = 0;
+      this.waypoints.forEach(wp => wp.passed = false);
+      return true;
+    }
+    return false;
+  }
+  
+  findWaypointAt(x, y) {
+    const clickRadius = 12;
+    for (let i = 0; i < this.waypoints.length; i++) {
+      const wp = this.waypoints[i];
+      if (Math.hypot(wp.x - x, wp.y - y) <= clickRadius) return i;
+    }
+    return -1;
+  }
+  
+  clearWaypoints() {
+    this.waypoints = [];
+    this.currentWaypointIndex = 0;
+  }
+  
+  // === Avoid zones ===
+  addAvoidZone(x, y, radius) {
+    this.avoidZones.push({ x, y, radius });
+  }
+  
+  removeAvoidZoneAt(x, y) {
+    const idx = this.findAvoidZoneAt(x, y);
+    if (idx >= 0) {
+      this.avoidZones.splice(idx, 1);
+      return true;
+    }
+    return false;
+  }
+  
+  findAvoidZoneAt(x, y) {
+    const clickRadius = 15;
+    for (let i = 0; i < this.avoidZones.length; i++) {
+      const az = this.avoidZones[i];
+      if (Math.hypot(az.x - x, az.y - y) <= clickRadius) return i;
+    }
+    return -1;
+  }
+  
+  clearAvoidZones() {
+    this.avoidZones = [];
+  }
+  
+  // === Навигация ===
+  getNavTarget() {
+    if (this.currentWaypointIndex < this.waypoints.length) {
+      const wp = this.waypoints[this.currentWaypointIndex];
+      return { x: wp.x, y: wp.y };
+    }
+    
+    if (!this.entryChecked || !this.entrySuccess) {
+      return { x: this.entryX, y: this.gateY };
+    } else {
+      return { x: this.islandX + this.islandW + 60, y: this.gateY };
+    }
+  }
+  
+  getInputs() {
+    const target = this.getNavTarget();
+    const dx = target.x - this.boat.x;
+    const dy = target.y - this.boat.y;
+    const dist = Math.sqrt(dx * dx + dy * dy);
+    const angleToTarget = Math.atan2(dy, dx);
+    const angleDiff = this.normalizeAngle(angleToTarget - this.boat.heading);
+    const diag = Math.sqrt(this.width ** 2 + this.height ** 2);
+    
+    let avoidDist = Infinity;
+    let avoidAngle = 0;
+    
+    if (this.avoidZones.length > 0) {
+      let nearestAz = null;
+      for (const az of this.avoidZones) {
+        const d = Math.hypot(az.x - this.boat.x, az.y - this.boat.y);
+        if (d < avoidDist) {
+          avoidDist = d;
+          nearestAz = az;
+        }
+      }
+      if (nearestAz) {
+        const azDx = nearestAz.x - this.boat.x;
+        const azDy = nearestAz.y - this.boat.y;
+        avoidAngle = this.normalizeAngle(Math.atan2(azDy, azDx) - this.boat.heading);
+      }
+    }
+    
+    return [
+      dist / diag,
+      angleDiff / Math.PI,
+      Math.sin(this.boat.heading),
+      Math.cos(this.boat.heading),
+      avoidDist === Infinity ? 0 : avoidDist / diag,
+      avoidAngle / Math.PI
+    ];
+  }
+  
+  normalizeAngle(angle) {
+    while (angle > Math.PI) angle -= Math.PI * 2;
+    while (angle < -Math.PI) angle += Math.PI * 2;
+    return angle;
+  }
+  
+  update(dt) {
+    if (!this.running || this.finished) return;
+    
+    this.time += dt;
+    
+    if (this.time >= this.maxTime) {
+      this.finished = true;
+      this.score = this.calculateScore() - 500;
+      return;
+    }
+    
+    if (this.boat.x < -50 || this.boat.x > this.width + 50 ||
+        this.boat.y < -50 || this.boat.y > this.height + 50) {
+      this.finished = true;
+      this.score = this.calculateScore() - 2000;
+      return;
+    }
+    
+    this.checkWaypoints();
+    this.checkEntryPoint();
+    if (this.finished) return;
+    
+    if (this.checkIslandCollision()) {
+      this.finished = true;
+      this.score = this.calculateScore() - 5000;
+      return;
+    }
+    
+    if (this.checkAvoidZones()) {
+      this.finished = true;
+      this.score = this.calculateScore() - this.avoidPenalty;
+      return;
+    }
+    
+    if (this.checkDockEntry()) {
+      this.finished = true;
+      this.score = this.calculateScore() + 10000 + (this.maxTime - this.time) * 100;
+      return;
+    }
+    
+    let rudder = 0;
+    
+    if (this.aiEnabled) {
+      const inputs = this.getInputs();
+      const output = this.nn.forward(inputs);
+      rudder = output[0];
+    }
+    
+    // === DENSE REWARD ===
+    const entryDist = Math.hypot(this.entryX - this.boat.x, this.gateY - this.boat.y);
+    if (this.prevEntryDist == null) this.prevEntryDist = entryDist;
+    this.score += (this.prevEntryDist - entryDist) * 1.0;
+    this.prevEntryDist = entryDist;
+    
+    const target = this.getNavTarget();
+    const dx = target.x - this.boat.x;
+    const dy = target.y - this.boat.y;
+    const currDist = Math.sqrt(dx * dx + dy * dy);
+    const angleToTarget = Math.atan2(dy, dx);
+    const angleDiff = this.normalizeAngle(angleToTarget - this.boat.heading);
+    
+    if (this.prevDist === null) this.prevDist = currDist;
+    
+    this.score += this.boat.speed * Math.cos(angleDiff) * dt * 20;
+    this.score += (this.prevDist - currDist) * 1;
+    
+    const deepBonus = this.entrySuccess ? 8 : 2;
+    this.score += this.boat.speed * Math.cos(this.boat.heading) * dt * deepBonus;
+    this.score -= Math.abs(rudder) * dt * 2;
+    
+    this.prevDist = currDist;
+    
+    this.boat.update(dt, rudder);
+  }
+  
+  checkWaypoints() {
+    if (this.currentWaypointIndex >= this.waypoints.length) return;
+    
+    const wp = this.waypoints[this.currentWaypointIndex];
+    const dist = Math.hypot(this.boat.x - wp.x, this.boat.y - wp.y);
+    
+    if (dist <= this.waypointRadius) {
+      wp.passed = true;
+      this.score += this.waypointBonus;
+      this.currentWaypointIndex++;
+      this.prevDist = null;
+    }
+  }
+  
+  checkIslandCollision() {
+    const boat = this.boat;
+    const ix = this.islandX;
+    const iy = this.islandY;
+    const iw = this.islandW;
+    const ih = this.islandH;
+    const gy = this.gateY;
+    const gw = this.gateWidth;
+    
+    if (boat.x > ix && boat.x < ix + iw) {
+      if (boat.y < gy - gw / 2 || boat.y > gy + gw / 2) {
+        return true;
+      }
+    }
+    return false;
+  }
+  
+  checkAvoidZones() {
+    for (const az of this.avoidZones) {
+      const dist = Math.hypot(this.boat.x - az.x, this.boat.y - az.y);
+      if (dist <= az.radius) {
+        return true;
+      }
+    }
+    return false;
+  }
+  
+  checkEntryPoint() {
+    if (this.entryChecked || this.boat.x <= this.entryX) return;
+    
+    this.entryChecked = true;
+    
+    const inGateY = Math.abs(this.boat.y - this.gateY) < this.gateWidth / 2;
+    const alignedHeading = Math.abs(this.normalizeAngle(this.boat.heading)) < 0.3;
+    
+    if (inGateY && alignedHeading) {
+      this.entrySuccess = true;
+      this.prevDist = null;
+    } else {
+      this.entrySuccess = false;
+      this.finished = true;
+      this.score = this.calculateScore() - 3000;
+    }
+  }
+  
+  checkDockEntry() {
+    const passedDock = this.boat.x > this.islandX + this.islandW;
+    const alignedY = Math.abs(this.boat.y - this.gateY) < this.gateWidth / 2;
+    return passedDock && alignedY && this.entrySuccess;
+  }
+  
+  isOverIsland(x, y) {
+    if (x >= this.islandX && x <= this.islandX + this.islandW) {
+      const topH = this.gateY - this.gateWidth / 2 - this.islandY;
+      const bottomY = this.gateY + this.gateWidth / 2;
+      const bottomH = this.islandY + this.islandH - bottomY;
+      
+      if (y >= this.islandY && y <= this.islandY + topH) return true;
+      if (y >= bottomY && y <= bottomY + bottomH) return true;
+    }
+    return false;
+  }
+  
+  calculateScore() {
+    const target = this.getNavTarget();
+    const dx = target.x - this.boat.x;
+    const dy = target.y - this.boat.y;
+    const dist = Math.sqrt(dx * dx + dy * dy);
+    const angleToTarget = Math.atan2(dy, dx);
+    const angleDiff = Math.abs(this.normalizeAngle(angleToTarget - this.boat.heading));
+    
+    const yOffset = Math.abs(this.boat.y - this.gateY);
+    
+    let score = this.score;
+    
+    score -= dist * 0.3;
+    score -= angleDiff * 10;
+    score -= yOffset * 0.2;
+    
+    return score;
+  }
+  
+  reset(network = null, randomize = true) {
+    if (randomize) {
+      this.randomizeLayout();
+    }
+    this.time = 0;
+    this.finished = false;
+    this.running = true;
+    this.score = 0;
+    this.entryChecked = false;
+    this.entrySuccess = false;
+    this.prevDist = null;
+    this.prevEntryDist = null;
+    
+    this.currentWaypointIndex = 0;
+    this.waypoints.forEach(wp => wp.passed = false);
+    
+    if (network) {
+      this.nn = network;
+    }
+  }
+  
+  saveBestBrain() {
+    if (!this.bestNetwork) return;
+    const data = {
+      network: this.bestNetwork.toJSON(),
+      generation: this.generation,
+      bestScore: this.bestScore,
+      savedAt: new Date().toISOString()
+    };
+    localStorage.setItem('boat-dock-ai-best', JSON.stringify(data));
+  }
+  
+  loadBestBrain() {
+    try {
+      const raw = localStorage.getItem('boat-dock-ai-best');
+      if (!raw) return;
+      const data = JSON.parse(raw);
+      if (data.network.outputSize !== 1) {
+        localStorage.removeItem('boat-dock-ai-best');
+        return;
+      }
+      let loaded = NeuralNetwork.fromJSON(data.network);
+      if (loaded.inputSize < 6) {
+        loaded = loaded.migrateInputSize(6);
+      }
+      this.nn = loaded;
+      this.bestNetwork = loaded;
+      this.generation = data.generation || 1;
+      this.bestScore = data.bestScore || -Infinity;
+    } catch (e) {
+      console.warn('Не удалось загрузить сохранённую сеть:', e);
+    }
+  }
+  
+  exportBrain() {
+    const network = this.bestNetwork || this.nn;
+    const data = {
+      network: network.toJSON(),
+      generation: this.generation,
+      bestScore: this.bestScore,
+      exportedAt: new Date().toISOString()
+    };
+    const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `boat-dock-brain-gen${this.generation}.json`;
+    a.click();
+    URL.revokeObjectURL(url);
+  }
+  
+  importBrain(jsonString) {
+    const data = JSON.parse(jsonString);
+    if (data.network.outputSize !== 1) throw new Error('Несовместимый мозг');
+    let loaded = NeuralNetwork.fromJSON(data.network);
+    if (loaded.inputSize < 6) {
+      loaded = loaded.migrateInputSize(6);
+    }
+    this.nn = loaded;
+    this.bestNetwork = loaded;
+    this.generation = data.generation || 1;
+    this.bestScore = data.bestScore || -Infinity;
+    this.saveBestBrain();
+    this.reset(this.nn, true);
+  }
+  
+  initPopulation() {
+    this.population = [];
+    const base = this.bestNetwork || this.nn;
+    this.population.push({ network: base, score: 0 });
+    
+    for (let i = 0; i < 15; i++) {
+      this.population.push({
+        network: base.mutate(0.1 + Math.random() * 0.2, 0.2 + Math.random() * 0.3),
+        score: 0
+      });
+    }
+    
+    while (this.population.length < this.populationSize) {
+      this.population.push({
+        network: new NeuralNetwork(6, 8, 1),
+        score: 0
+      });
+    }
+  }
+  
+  evaluateIndividual(index) {
+    const individual = this.population[index];
+    this.reset(individual.network, true);
+    
+    const dt = 0.05;
+    while (!this.finished && this.time < this.maxTime) {
+      this.update(dt);
+    }
+    
+    individual.score = this.score;
+    
+    if (individual.score > this.bestScore) {
+      this.bestScore = individual.score;
+      this.bestNetwork = individual.network;
+    }
+  }
+  
+  evaluateGeneration() {
+    for (let i = 0; i < this.population.length; i++) {
+      this.evaluateIndividual(i);
+    }
+    this.population.sort((a, b) => b.score - a.score);
+  }
+  
+  async evaluateGenerationAsync(onIndividualDone = null) {
+    for (let i = 0; i < this.population.length; i++) {
+      if (!this.trainingActive) return;
+      this.evaluateIndividual(i);
+      if (onIndividualDone) {
+        onIndividualDone(i + 1, this.population.length, this.bestScore);
+      }
+      if (i % 5 === 4) {
+        await new Promise(r => requestAnimationFrame(r));
+      }
+    }
+    this.population.sort((a, b) => b.score - a.score);
+  }
+  
+  nextGeneration() {
+    const eliteCount = Math.floor(this.populationSize * 0.2);
+    const newPopulation = [];
+    
+    for (let i = 0; i < eliteCount; i++) {
+      newPopulation.push({
+        network: this.population[i].network.mutate(0.05, 0.1),
+        score: 0
+      });
+    }
+    
+    while (newPopulation.length < this.populationSize) {
+      const parent1 = this.tournamentSelect();
+      const parent2 = this.tournamentSelect();
+      let child;
+      if (Math.random() < 0.7) {
+        child = NeuralNetwork.crossover(parent1.network, parent2.network);
+      } else {
+        child = parent1.network.mutate(0.1, 0.2);
+      }
+      child = child.mutate(0.2, 0.3);
+      newPopulation.push({ network: child, score: 0 });
+    }
+    
+    this.population = newPopulation;
+    this.generation++;
+  }
+  
+  tournamentSelect(tournamentSize = 5) {
+    let best = this.population[Math.floor(Math.random() * this.population.length)];
+    for (let i = 1; i < tournamentSize; i++) {
+      const candidate = this.population[Math.floor(Math.random() * this.population.length)];
+      if (candidate.score > best.score) best = candidate;
+    }
+    return best;
+  }
+  
+  async trainContinuous(onProgress = null, onGenerationEnd = null) {
+    this.trainingActive = true;
+    if (this.population.length === 0) this.initPopulation();
+    
+    while (this.trainingActive) {
+      await this.evaluateGenerationAsync((current, total, bestScore) => {
+        if (onProgress) onProgress(this.generation, current, total, bestScore);
+      });
+      if (!this.trainingActive) break;
+      this.nextGeneration();
+      if (onGenerationEnd) onGenerationEnd(this.generation, this.bestScore, this.bestNetwork);
+    }
+    
+    if (this.bestNetwork) this.nn = this.bestNetwork;
+    this.saveBestBrain();
+    this.reset(this.nn, true);
+  }
+  
+  stopTraining() {
+    this.trainingActive = false;
+  }
+  
+  mutateCurrent() {
+    this.nn = this.nn.mutate(0.3, 0.5);
+    this.reset(this.nn, true);
+  }
+  
+  resetBrain() {
+    localStorage.removeItem('boat-dock-ai-best');
+    this.nn = new NeuralNetwork(6, 8, 1);
+    this.bestNetwork = null;
+    this.bestScore = -Infinity;
+    this.generation = 1;
+    this.population = [];
+    this.reset(null, true);
+  }
+}

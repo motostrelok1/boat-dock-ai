@@ -1,0 +1,341 @@
+import { Renderer } from './renderer.js';
+import { Simulation } from './simulation.js';
+
+const canvas = document.getElementById('simCanvas');
+const renderer = new Renderer(canvas, 1800, 1000);
+const simulation = new Simulation(1800, 1000);
+
+simulation.resetBrain();
+
+const hudSpeed = document.getElementById('hud-speed');
+const hudHeading = document.getElementById('hud-heading');
+const hudRudder = document.getElementById('hud-rudder');
+const hudScore = document.getElementById('hud-score');
+const hudInputDist = document.getElementById('hud-input-dist');
+const hudInputAngle = document.getElementById('hud-input-angle');
+const hudInputSin = document.getElementById('hud-input-sin');
+const hudInputCos = document.getElementById('hud-input-cos');
+const hudInputAvoidDist = document.getElementById('hud-input-avoid-dist');
+const hudInputAvoidAngle = document.getElementById('hud-input-avoid-angle');
+const hudOutputRudder = document.getElementById('hud-output-rudder');
+const hudLifetime = document.getElementById('hud-lifetime');
+const hudGeneration = document.getElementById('hud-generation');
+const hudBestScore = document.getElementById('hud-best-score');
+const hudSaveStatus = document.getElementById('hud-save-status');
+
+const progressContainer = document.getElementById('progress-container');
+const progressFill = document.getElementById('progress-fill');
+const progressText = document.getElementById('progress-text');
+
+const btnReset = document.getElementById('btn-reset');
+const btnToggleAI = document.getElementById('btn-toggle-ai');
+const btnTrain = document.getElementById('btn-train');
+const btnMutate = document.getElementById('btn-mutate');
+const btnSave = document.getElementById('btn-save');
+const btnLoad = document.getElementById('btn-load');
+const btnExport = document.getElementById('btn-export');
+const btnImport = document.getElementById('btn-import');
+const simSpeedSlider = document.getElementById('sim-speed');
+const speedVal = document.getElementById('speed-val');
+
+const btnWaypointMode = document.getElementById('btn-waypoint-mode');
+const waypointCount = document.getElementById('waypoint-count');
+const waypointIndicator = document.getElementById('waypoint-indicator');
+const btnClearWaypoints = document.getElementById('btn-clear-waypoints');
+
+const btnAvoidMode = document.getElementById('btn-avoid-mode');
+const avoidRadius = document.getElementById('avoid-radius');
+const avoidCount = document.getElementById('avoid-count');
+const avoidIndicator = document.getElementById('avoid-indicator');
+const btnClearAvoid = document.getElementById('btn-clear-avoid');
+const chkRandomWaypoints = document.getElementById('chk-random-waypoints');
+
+let simSpeed = 1;
+let lastTime = 0;
+let isTraining = false;
+let autoRestartTimer = null;
+let generationCounter = 0;
+
+let clickMode = 'none';
+
+function setClickMode(mode) {
+  clickMode = mode;
+  btnWaypointMode.classList.toggle('active', mode === 'waypoint');
+  btnAvoidMode.classList.toggle('active', mode === 'avoid');
+  waypointIndicator.textContent = mode === 'waypoint' ? 'Режим: установка точек' : 'Режим: выкл';
+  waypointIndicator.style.color = mode === 'waypoint' ? '#00e676' : '#80deea';
+  avoidIndicator.textContent = mode === 'avoid' ? 'Режим: установка запретов' : 'Режим: выкл';
+  avoidIndicator.style.color = mode === 'avoid' ? '#ff5252' : '#80deea';
+  canvas.style.cursor = mode === 'none' ? 'crosshair' : 'pointer';
+}
+
+btnWaypointMode.addEventListener('click', () => {
+  setClickMode(clickMode === 'waypoint' ? 'none' : 'waypoint');
+});
+
+btnAvoidMode.addEventListener('click', () => {
+  setClickMode(clickMode === 'avoid' ? 'none' : 'avoid');
+});
+
+btnClearWaypoints.addEventListener('click', () => simulation.clearWaypoints());
+btnClearAvoid.addEventListener('click', () => simulation.clearAvoidZones());
+
+function generateRandomWaypoints() {
+  simulation.clearWaypoints();
+  const count = parseInt(waypointCount.value, 10);
+  for (let i = 0; i < count; i++) {
+    let x, y, attempts = 0;
+    do {
+      x = 40 + Math.random() * (simulation.width - 80);
+      y = 40 + Math.random() * (simulation.height - 80);
+      attempts++;
+    } while (simulation.isOverIsland(x, y) && attempts < 100);
+    simulation.addWaypoint(x, y);
+  }
+}
+
+chkRandomWaypoints.addEventListener('change', (e) => {
+  if (e.target.checked) {
+    generateRandomWaypoints();
+  } else {
+    simulation.clearWaypoints();
+  }
+});
+
+canvas.addEventListener('click', (e) => {
+  if (clickMode === 'none') return;
+  const rect = canvas.getBoundingClientRect();
+  const scaleX = canvas.width / rect.width;
+  const scaleY = canvas.height / rect.height;
+  const x = (e.clientX - rect.left) * scaleX;
+  const y = (e.clientY - rect.top) * scaleY;
+
+  if (clickMode === 'waypoint') {
+    if (simulation.removeWaypointAt(x, y)) return;
+    const maxCount = parseInt(waypointCount.value, 10);
+    if (simulation.waypoints.length < maxCount) simulation.addWaypoint(x, y);
+  } else if (clickMode === 'avoid') {
+    if (simulation.removeAvoidZoneAt(x, y)) return;
+    const maxCount = parseInt(avoidCount.value, 10);
+    if (simulation.avoidZones.length < maxCount) {
+      simulation.addAvoidZone(x, y, parseInt(avoidRadius.value, 10));
+    }
+  }
+});
+
+function updateHUD() {
+  const state = simulation.boat.getState();
+  hudSpeed.textContent = state.speed.toFixed(1);
+  hudHeading.textContent = (state.heading * 180 / Math.PI).toFixed(1);
+  hudRudder.textContent = (state.rudderAngle * 45).toFixed(1);
+  hudScore.textContent = simulation.score.toFixed(1);
+
+  const inputs = simulation.getInputs();
+  const output = simulation.aiEnabled ? simulation.nn.forward(inputs) : [simulation.boat.rudderAngle];
+
+  hudInputDist.textContent = inputs[0].toFixed(2);
+  hudInputAngle.textContent = inputs[1].toFixed(2);
+  hudInputSin.textContent = inputs[2].toFixed(2);
+  hudInputCos.textContent = inputs[3].toFixed(2);
+  hudInputAvoidDist.textContent = inputs[4].toFixed(2);
+  hudInputAvoidAngle.textContent = inputs[5].toFixed(2);
+  hudOutputRudder.textContent = output[0].toFixed(2);
+
+  hudGeneration.textContent = simulation.generation;
+  hudBestScore.textContent = simulation.bestScore.toFixed(0);
+
+  const saved = localStorage.getItem('boat-dock-ai-best');
+  hudSaveStatus.textContent = saved ? '✓ Есть' : '✗ Нет';
+  hudSaveStatus.style.color = saved ? '#00e676' : '#ff5252';
+
+  hudLifetime.textContent = Math.max(0, simulation.maxTime - simulation.time).toFixed(1);
+}
+
+function render() {
+  renderer.clear();
+  renderer.drawGrid();
+  renderer.drawStartLine();
+  renderer.drawIsland(
+    simulation.islandX, simulation.islandY, simulation.islandW, simulation.islandH,
+    simulation.gateY, simulation.gateWidth, simulation.entryX
+  );
+  renderer.drawWaypoints(simulation.waypoints, simulation.currentWaypointIndex);
+  renderer.drawAvoidZones(simulation.avoidZones);
+  renderer.drawTrail(simulation.boat.trail);
+  renderer.drawBoat(simulation.boat);
+  renderer.drawPrediction(simulation.boat, simulation.boat.getPrediction(3));
+
+  const ctx = renderer.ctx;
+  ctx.font = 'bold 14px sans-serif';
+  ctx.textAlign = 'left';
+
+  if (simulation.finished) {
+    if (simulation.checkDockEntry()) {
+      ctx.fillStyle = '#00e676';
+      ctx.fillText('✓ ФАРВАТЕР ПРОЙДЕН!', 20, 30);
+    } else if (simulation.entryChecked && !simulation.entrySuccess) {
+      ctx.fillStyle = '#ff5252';
+      ctx.fillText('✗ НЕЗАЧЁТ — НЕВЕРНЫЙ ВХОД', 20, 30);
+    } else {
+      ctx.fillStyle = '#ff5252';
+      ctx.fillText('✗ ПОПЫТКА ЗАВЕРШЕНА', 20, 30);
+    }
+  } else if (simulation.entrySuccess) {
+    ctx.fillStyle = '#00e676';
+    ctx.fillText('✓ ТОЧКА ВХОДА — ИДЁМ ПО ФАРВАТЕРУ', 20, 30);
+  } else {
+    ctx.fillStyle = '#00e5ff';
+    ctx.fillText(isTraining ? '🧠 ОБУЧЕНИЕ...' : '▶ СИМУЛЯЦИЯ', 20, 30);
+  }
+
+  ctx.fillStyle = '#80deea';
+  ctx.fillText(`Время: ${simulation.time.toFixed(1)} / ${simulation.maxTime}с`, 20, 50);
+  ctx.fillStyle = simulation.aiEnabled ? '#00e676' : '#ff5252';
+  ctx.fillText(simulation.aiEnabled ? '🤖 ИИ АКТИВЕН' : '👤 РУЧНОЙ', 20, 70);
+
+  if (simulation.waypoints.length > 0) {
+    const passed = simulation.waypoints.filter(wp => wp.passed).length;
+    ctx.fillStyle = '#00e676';
+    ctx.fillText(`📍 Точки: ${passed}/${simulation.waypoints.length}`, 20, 90);
+  }
+  if (simulation.avoidZones.length > 0) {
+    ctx.fillStyle = '#ff5252';
+    ctx.fillText(`🚫 Запретов: ${simulation.avoidZones.length}`, 20, 110);
+  }
+
+  const timeRatio = simulation.time / simulation.maxTime;
+  ctx.fillStyle = 'rgba(255,255,255,0.1)';
+  ctx.fillRect(20, 125, 200, 6);
+  ctx.fillStyle = timeRatio > 0.8 ? '#ff5252' : (timeRatio > 0.5 ? '#ffab40' : '#00e676');
+  ctx.fillRect(20, 125, 200 * (1 - timeRatio), 6);
+}
+
+function gameLoop(timestamp) {
+  if (!lastTime) lastTime = timestamp;
+  const rawDt = (timestamp - lastTime) / 1000;
+  lastTime = timestamp;
+  const dt = Math.min(rawDt, 0.05) * simSpeed;
+
+  if (!isTraining) {
+    simulation.update(dt);
+    if (simulation.finished && simulation.aiEnabled && !autoRestartTimer) {
+      autoRestartTimer = setTimeout(() => {
+        simulation.reset(simulation.nn, true);
+        if (chkRandomWaypoints.checked) generateRandomWaypoints();
+        autoRestartTimer = null;
+      }, 800);
+    }
+    updateHUD();
+    render();
+  }
+  requestAnimationFrame(gameLoop);
+}
+
+btnReset.addEventListener('click', () => {
+  if (autoRestartTimer) { clearTimeout(autoRestartTimer); autoRestartTimer = null; }
+  simulation.reset(null, true);
+  if (chkRandomWaypoints.checked) generateRandomWaypoints();
+  btnToggleAI.classList.remove('ai-off');
+});
+
+btnToggleAI.addEventListener('click', () => {
+  simulation.aiEnabled = !simulation.aiEnabled;
+  btnToggleAI.classList.toggle('ai-off', !simulation.aiEnabled);
+});
+
+btnTrain.addEventListener('click', async () => {
+  if (isTraining) {
+    simulation.stopTraining();
+    isTraining = false;
+    btnTrain.textContent = '🏋️ Обучать непрерывно';
+    btnTrain.style.background = '#1565c0';
+    progressContainer.style.display = 'none';
+    simulation.reset(simulation.bestNetwork || simulation.nn, true);
+    if (chkRandomWaypoints.checked) generateRandomWaypoints();
+    updateHUD();
+    return;
+  }
+  isTraining = true;
+  generationCounter = 0;
+  btnTrain.textContent = '⏹ Стоп обучение';
+  btnTrain.style.background = '#c62828';
+  progressContainer.style.display = 'block';
+  progressFill.style.width = '0%';
+
+  await simulation.trainContinuous(
+    (generation, current, total, bestScore) => {
+      const pct = (current / total) * 100;
+      progressFill.style.width = pct + '%';
+      progressText.textContent = `Поколение ${generation} — особь ${current}/${total} — скор: ${bestScore.toFixed(0)}`;
+      hudGeneration.textContent = generation;
+      hudBestScore.textContent = bestScore.toFixed(0);
+    },
+    (generation, bestScore, bestNetwork) => {
+      generationCounter++;
+      if (generationCounter % 10 === 0 && bestNetwork) {
+        simulation.nn = bestNetwork;
+        simulation.reset(bestNetwork, true);
+        if (chkRandomWaypoints.checked) generateRandomWaypoints();
+      }
+    }
+  );
+
+  isTraining = false;
+  btnTrain.textContent = '🏋️ Обучать непрерывно';
+  btnTrain.style.background = '#1565c0';
+  progressContainer.style.display = 'none';
+  simulation.reset(simulation.bestNetwork || simulation.nn, true);
+  if (chkRandomWaypoints.checked) generateRandomWaypoints();
+  updateHUD();
+});
+
+btnMutate.addEventListener('click', () => simulation.mutateCurrent());
+
+btnSave.addEventListener('click', () => {
+  simulation.saveBestBrain();
+  updateHUD();
+  const orig = btnSave.textContent;
+  btnSave.textContent = '✓ Сохранено!';
+  setTimeout(() => btnSave.textContent = orig, 1500);
+});
+
+btnLoad.addEventListener('click', () => {
+  simulation.loadBestBrain();
+  simulation.reset(simulation.nn, true);
+  if (chkRandomWaypoints.checked) generateRandomWaypoints();
+  updateHUD();
+  const orig = btnLoad.textContent;
+  btnLoad.textContent = '✓ Загружено!';
+  setTimeout(() => btnLoad.textContent = orig, 1500);
+});
+
+btnExport.addEventListener('click', () => simulation.exportBrain());
+
+btnImport.addEventListener('change', (e) => {
+  const file = e.target.files[0];
+  if (!file) return;
+  const reader = new FileReader();
+  reader.onload = (event) => {
+    try { simulation.importBrain(event.target.result); updateHUD(); alert('✓ Импорт'); }
+    catch (err) { alert('Ошибка: ' + err.message); }
+  };
+  reader.readAsText(file);
+  e.target.value = '';
+});
+
+simSpeedSlider.addEventListener('input', (e) => {
+  simSpeed = parseFloat(e.target.value);
+  speedVal.textContent = simSpeed.toFixed(1);
+});
+
+document.addEventListener('keydown', (e) => {
+  if (simulation.aiEnabled) return;
+  if (e.key === 'ArrowLeft') simulation.boat.rudderAngle = -1;
+  else if (e.key === 'ArrowRight') simulation.boat.rudderAngle = 1;
+});
+
+document.addEventListener('keyup', (e) => {
+  if (e.key === 'ArrowLeft' || e.key === 'ArrowRight') simulation.boat.rudderAngle = 0;
+});
+
+requestAnimationFrame(gameLoop);

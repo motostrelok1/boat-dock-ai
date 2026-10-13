@@ -1,0 +1,320 @@
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+body {
+  font-family: 'Segoe UI', system-ui, sans-serif;
+  background: linear-gradient(135deg, #0f2027, #203a43, #2c5364);
+  color: #e0f7fa;
+  min-height: 100vh;
+  overflow-x: hidden;
+}
+
+#app {
+  max-width: 1400px;
+  margin: 0 auto;
+  padding: 20px;
+}
+
+.simulation-container {
+  display: flex;
+  gap: 20px;
+  flex-wrap: wrap;
+  justify-content: center;
+  margin-bottom: 20px;
+}
+
+#simCanvas {
+  border-radius: 8px;
+  box-shadow: 0 8px 32px rgba(0,0,0,0.5);
+  background: #001a2e;
+  cursor: crosshair;
+}
+
+.hud {
+  background: rgba(0, 10, 20, 0.85);
+  border-radius: 12px;
+  padding: 20px;
+  min-width: 280px;
+  backdrop-filter: blur(10px);
+  border: 1px solid rgba(0, 229, 255, 0.2);
+}
+
+.hud-section {
+  margin-bottom: 20px;
+  padding-bottom: 15px;
+  border-bottom: 1px solid rgba(0, 255, 255, 0.1);
+}
+
+.hud-section:last-child {
+  border-bottom: none;
+  margin-bottom: 0;
+}
+
+.hud-section h3 {
+  font-size: 14px;
+  text-transform: uppercase;
+  letter-spacing: 1px;
+  margin-bottom: 12px;
+  color: #00e5ff;
+}
+
+.hud-row {
+  display: flex;
+  justify-content: space-between;
+  margin-bottom: 8px;
+  font-size: 14px;
+}
+
+.hud-row .label {
+  color: #80deea;
+}
+
+.hud-row .value {
+  font-weight: bold;
+  color: #00e5ff;
+  font-variant-numeric: tabular-nums;
+}
+
+.controls {
+  display: flex;
+  gap: 12px;
+  flex-wrap: wrap;
+  justify-content: center;
+  align-items: center;
+  margin-bottom: 20px;
+}
+
+.controls button {
+  padding: 12px 24px;
+  border: none;
+  border-radius: 6px;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  background: #1565c0;
+  color: #e0f7fa;
+}
+
+.controls button:hover {
+  background: #1e88e5;
+  transform: translateY(-2px);
+  box-shadow: 0 4px 16px rgba(0,0,0,0.3);
+}
+
+.controls button.active {
+  background: #00e676;
+  color: #000;
+}
+
+.controls button.active:hover {
+  background: #00c853;
+}
+
+.controls button.btn-small {
+  padding: 8px 16px;
+  font-size: 12px;
+}
+
+#btn-toggle-ai.ai-off {
+  background: #c62828;
+}
+
+/* Stage 2.1: Route controls */
+.route-controls {
+  background: rgba(0, 230, 118, 0.05);
+  border: 1px solid rgba(0, 230, 118, 0.2);
+  border-radius: 8px;
+  padding: 12px;
+  margin-bottom: 12px;
+}
+
+.route-controls button {
+  background: #2e7d32;
+}
+
+.route-controls button:hover {
+  background: #388e3c;
+}
+
+.route-controls button.active {
+  background: #00e676;
+  color: #000;
+}
+
+/* Stage 2.1: Avoid controls */
+.avoid-controls {
+  background: rgba(255, 82, 82, 0.05);
+  border: 1px solid rgba(255, 82, 82, 0.2);
+  border-radius: 8px;
+  padding: 12px;
+  margin-bottom: 12px;
+}
+
+.avoid-controls button {
+  background: #c62828;
+}
+
+.avoid-controls button:hover {
+  background: #d32f2f;
+}
+
+.avoid-controls button.active {
+  background: #ff5252;
+  color: #000;
+}
+
+.mode-indicator {
+  font-size: 12px;
+  color: #80deea;
+  min-width: 100px;
+  text-align: center;
+}
+
+.checkbox-label {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  color: #80deea;
+  cursor: pointer;
+  user-select: none;
+}
+
+.checkbox-label input[type="checkbox"] {
+  width: 16px;
+  height: 16px;
+  accent-color: #00e676;
+  cursor: pointer;
+}
+  font-size: 12px;
+  color: #80deea;
+  min-width: 100px;
+  text-align: center;
+}
+
+.save-controls {
+  margin-top: -10px;
+}
+
+.save-controls button,
+.save-controls .file-btn {
+  padding: 10px 20px;
+  border: none;
+  border-radius: 6px;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  background: #1565c0;
+  color: #e0f7fa;
+}
+
+.save-controls button:hover,
+.save-controls .file-btn:hover {
+  background: #1e88e5;
+  transform: translateY(-2px);
+  box-shadow: 0 4px 16px rgba(0,0,0,0.3);
+}
+
+.file-btn {
+  display: inline-flex;
+  align-items: center;
+  position: relative;
+  overflow: hidden;
+}
+
+.file-btn input[type="file"] {
+  position: absolute;
+  left: -9999px;
+}
+
+.progress-container {
+  max-width: 600px;
+  margin: -10px auto 20px;
+  padding: 0 20px;
+}
+
+.progress-bar {
+  width: 100%;
+  height: 8px;
+  background: rgba(0, 0, 0, 0.5);
+  border-radius: 4px;
+  overflow: hidden;
+  margin-bottom: 8px;
+}
+
+.progress-fill {
+  height: 100%;
+  width: 0%;
+  background: #00e5ff;
+  border-radius: 4px;
+  transition: width 0.3s ease;
+}
+
+.progress-text {
+  text-align: center;
+  font-size: 13px;
+  color: #80deea;
+  font-variant-numeric: tabular-nums;
+}
+
+.control-group {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  align-items: center;
+}
+
+.control-group label {
+  font-size: 12px;
+  color: #80deea;
+  text-transform: uppercase;
+}
+
+.control-group input[type="range"] {
+  width: 150px;
+  cursor: pointer;
+}
+
+.control-group select {
+  padding: 6px 12px;
+  border-radius: 4px;
+  border: 1px solid rgba(0, 229, 255, 0.3);
+  background: rgba(0, 10, 20, 0.8);
+  color: #e0f7fa;
+  font-size: 13px;
+  cursor: pointer;
+}
+
+.instructions {
+  text-align: center;
+  font-size: 14px;
+  color: #80deea;
+  max-width: 800px;
+  margin: 0 auto;
+  line-height: 1.6;
+}
+
+.instructions strong {
+  color: #00e5ff;
+}
+
+@media (max-width: 900px) {
+  .simulation-container {
+    flex-direction: column;
+    align-items: center;
+  }
+  
+  #simCanvas {
+    max-width: 100%;
+    height: auto;
+  }
+}

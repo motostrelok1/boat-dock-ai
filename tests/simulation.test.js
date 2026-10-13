@@ -47,3 +47,29 @@ test('benchmark uses reproducible scenarios',()=>{
   assert.deepEqual(a.summary,b.summary);
   assert.deepEqual(a.runs.map(r=>r.score),b.runs.map(r=>r.score));
 });
+
+
+test('random avoid zones generate requested count and stay clear of spawn',()=>{
+  const s=fresh();
+  s.randomAvoidEnabled=true;
+  s.randomAvoidCount=5;
+  s.randomAvoidRadius=20;
+  s.reset(null,true);
+  assert.equal(s.avoidZones.length,5);
+  for (const z of s.avoidZones) {
+    assert.equal(z.radius,20);
+    assert.ok(z.x < s.entryX);
+    assert.ok(Math.hypot(z.x-s.boat.x,z.y-s.boat.y)>=z.radius+60);
+  }
+});
+test('random avoid zones are reproducible for deterministic layout',()=>{
+  const s=fresh();
+  s.randomAvoidEnabled=true;
+  s.randomAvoidCount=3;
+  s.randomAvoidRadius=30;
+  const rng=()=>0.5;
+  s.randomizeLayout(rng);
+  const first=JSON.stringify(s.avoidZones);
+  s.randomizeLayout(rng);
+  assert.equal(JSON.stringify(s.avoidZones),first);
+});

@@ -1,6 +1,16 @@
 import { Boat } from './boat.js';
 import { NeuralNetwork } from './neuralNetwork.js';
 
+// Детерминированный PRNG — для фиксированных карт оценки особей
+function mulberry32(a) {
+  return function () {
+    a |= 0; a = (a + 0x6D2B79F5) | 0;
+    let t = Math.imul(a ^ (a >>> 15), 1 | a);
+    t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+  };
+}
+
 export class Simulation {
   constructor(width, height) {
     this.width = width;
@@ -17,6 +27,8 @@ export class Simulation {
     this.bestNetwork = null;
     this.population = [];
     this.populationSize = 50;
+    this.evalMaps = 5; // особь оценивается на N фиксированных картах (средний score)
+    this.lastGenerationStats = null;
     
     this.running = true;
     this.finished = false;
@@ -53,26 +65,26 @@ export class Simulation {
     this.loadBestBrain();
   }
   
-  randomizeLayout() {
-    this.islandW = 120 + Math.random() * 80;
-    this.islandH = 180 + Math.random() * 120;
+  randomizeLayout(rng = Math.random) {
+    this.islandW = 120 + rng() * 80;
+    this.islandH = 180 + rng() * 120;
     this.islandX = this.width - this.islandW + 20;
-    this.islandY = 40 + Math.random() * (this.height - this.islandH - 80);
+    this.islandY = 40 + rng() * (this.height - this.islandH - 80);
     
     this.gateWidth = this.boat.width * 3.5;
-    this.gateY = this.islandY + 30 + Math.random() * (this.islandH - 60);
+    this.gateY = this.islandY + 30 + rng() * (this.islandH - 60);
     
     this.entryX = this.islandX - 60;
     
     let startX, startY;
     let attempts = 0;
     do {
-      startX = 40 + Math.random() * (this.width - 80);
-      startY = 40 + Math.random() * (this.height - 80);
+      startX = 40 + rng() * (this.width - 80);
+      startY = 40 + rng() * (this.height - 80);
       attempts++;
     } while (this.isOverIsland(startX, startY) && attempts < 100);
     
-    const startHeading = Math.random() * Math.PI * 2;
+    const startHeading = rng() * Math.PI * 2;
     
     this.boat.reset(startX, startY);
     this.boat.heading = startHeading;
@@ -243,6 +255,9 @@ export class Simulation {
       const inputs = this.getInputs();
       const output = this.nn.forward(inputs);
       rudder = output[0];
+    } else {
+      // Ручной режим: сохраняем руль, заданный со стрелок (boat.rudderAngle)
+      rudder = this.boat.rudderAngle;
     }
     
     // === DENSE REWARD ===
@@ -295,7 +310,7 @@ export class Simulation {
     const gy = this.gateY;
     const gw = this.gateWidth;
     
-    if (boat.x > ix && boat.x < ix + iw) {
+    if (boat.x > ix && boat.x < ix + iw && boat.y > iy && boat.y < iy + ih) {
       if (boat.y < gy - gw / 2 || boat.y > gy + gw / 2) {
         return true;
       }
@@ -314,7 +329,9 @@ export class Simulation {
   }
   
   checkEntryPoint() {
-    if (this.entryChecked || this.boat.x <= this.entryX) return;
+    // Пока не пройдены все точки маршрута, линия входа не проверяется
+    if (this.entryChecked || this.currentWaypointIndex < this.waypoints.length) return;
+    if (this.boat.x <= this.entryX) return;
     
     this.entryChecked = true;
     
@@ -450,6 +467,7 @@ export class Simulation {
     this.bestNetwork = loaded;
     this.generation = data.generation || 1;
     this.bestScore = data.bestScore || -Infinity;
+    this.population = []; // загруженный мозг должен стать основой новой популяции
     this.saveBestBrain();
     this.reset(this.nn, true);
   }
@@ -474,16 +492,29 @@ export class Simulation {
     }
   }
   
+  // Оценка на фиксированных картах: сид = f(поколение, номер карты),
+  // поэтому все особи одного поколения играют на одинаковых картах,
+  // а фитнес перестаёт быть лотереей.
   evaluateIndividual(index) {
     const individual = this.population[index];
-    this.reset(individual.network, true);
-    
     const dt = 0.05;
-    while (!this.finished && this.time < this.maxTime) {
-      this.update(dt);
+    let total = 0, successes = 0;
+    
+    for (let k = 0; k < this.evalMaps; k++) {
+      const rng = mulberry32(this.generation * 10007 + k * 131 + 17);
+      this.reset(individual.network, false);
+      this.randomizeLayout(rng);
+      
+      while (!this.finished && this.time < this.maxTime) {
+        this.update(dt);
+      }
+      
+      total += this.score;
+      if (this.checkDockEntry()) successes++;
     }
     
-    individual.score = this.score;
+    individual.score = total / this.evalMaps;
+    individual.successRate = successes / this.evalMaps;
     
     if (individual.score > this.bestScore) {
       this.bestScore = individual.score;
@@ -491,11 +522,31 @@ export class Simulation {
     }
   }
   
+  computeGenerationStats() {
+    const n = this.population.length || 1;
+    const meanScore = this.population.reduce((a, p) => a + p.score, 0) / n;
+    const meanSuccess = this.population.reduce((a, p) => a + (p.successRate || 0), 0) / n;
+    const best = this.population[0];
+    this.lastGenerationStats = {
+      generation: this.generation,
+      meanScore,
+      meanSuccess,
+      bestScore: best ? best.score : 0,
+      bestSuccess: best ? best.successRate || 0 : 0
+    };
+    console.log(
+      `[gen ${this.generation}] best: ${this.lastGenerationStats.bestScore.toFixed(0)} ` +
+      `(успех ${(this.lastGenerationStats.bestSuccess * 100).toFixed(0)}%), ` +
+      `среднее: ${meanScore.toFixed(0)} (успех ${(meanSuccess * 100).toFixed(0)}%)`
+    );
+  }
+  
   evaluateGeneration() {
     for (let i = 0; i < this.population.length; i++) {
       this.evaluateIndividual(i);
     }
     this.population.sort((a, b) => b.score - a.score);
+    this.computeGenerationStats();
   }
   
   async evaluateGenerationAsync(onIndividualDone = null) {
@@ -510,13 +561,23 @@ export class Simulation {
       }
     }
     this.population.sort((a, b) => b.score - a.score);
+    this.computeGenerationStats();
   }
   
   nextGeneration() {
-    const eliteCount = Math.floor(this.populationSize * 0.2);
+    const eliteKeep = Math.min(3, this.population.length);
+    const eliteMutate = Math.floor(this.populationSize * 0.2);
     const newPopulation = [];
     
-    for (let i = 0; i < eliteCount; i++) {
+    // Элиты сохраняются без мутации — лучшие решения не разрушаются
+    for (let i = 0; i < eliteKeep; i++) {
+      newPopulation.push({
+        network: this.population[i].network,
+        score: 0
+      });
+    }
+    
+    for (let i = 0; i < eliteMutate; i++) {
       newPopulation.push({
         network: this.population[i].network.mutate(0.05, 0.1),
         score: 0
@@ -559,7 +620,7 @@ export class Simulation {
       });
       if (!this.trainingActive) break;
       this.nextGeneration();
-      if (onGenerationEnd) onGenerationEnd(this.generation, this.bestScore, this.bestNetwork);
+      if (onGenerationEnd) onGenerationEnd(this.generation, this.bestScore, this.bestNetwork, this.lastGenerationStats);
     }
     
     if (this.bestNetwork) this.nn = this.bestNetwork;

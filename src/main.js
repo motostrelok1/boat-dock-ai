@@ -5,8 +5,6 @@ const canvas = document.getElementById('simCanvas');
 const renderer = new Renderer(canvas, 1800, 1000);
 const simulation = new Simulation(1800, 1000);
 
-simulation.resetBrain();
-
 const hudSpeed = document.getElementById('hud-speed');
 const hudHeading = document.getElementById('hud-heading');
 const hudRudder = document.getElementById('hud-rudder');
@@ -83,10 +81,13 @@ btnClearAvoid.addEventListener('click', () => simulation.clearAvoidZones());
 function generateRandomWaypoints() {
   simulation.clearWaypoints();
   const count = parseInt(waypointCount.value, 10);
+  // Точки маршрута только левее линии входа: правее неё лежит остров/фарватер,
+  // и точка там превращается в ловушку (недостижима без «незачёта»).
+  const maxX = Math.max(80, simulation.entryX - 40);
   for (let i = 0; i < count; i++) {
     let x, y, attempts = 0;
     do {
-      x = 40 + Math.random() * (simulation.width - 80);
+      x = 40 + Math.random() * (maxX - 40);
       y = 40 + Math.random() * (simulation.height - 80);
       attempts++;
     } while (simulation.isOverIsland(x, y) && attempts < 100);
@@ -270,8 +271,11 @@ btnTrain.addEventListener('click', async () => {
       hudGeneration.textContent = generation;
       hudBestScore.textContent = bestScore.toFixed(0);
     },
-    (generation, bestScore, bestNetwork) => {
+    (generation, bestScore, bestNetwork, stats) => {
       generationCounter++;
+      if (stats) {
+        progressText.textContent = `Поколение ${generation} — успех лучшего: ${(stats.bestSuccess * 100).toFixed(0)}%, средний: ${(stats.meanSuccess * 100).toFixed(0)}%`;
+      }
       if (generationCounter % 10 === 0 && bestNetwork) {
         simulation.nn = bestNetwork;
         simulation.reset(bestNetwork, true);

@@ -192,11 +192,6 @@ body {
   accent-color: #00e676;
   cursor: pointer;
 }
-  font-size: 12px;
-  color: #80deea;
-  min-width: 100px;
-  text-align: center;
-}
 
 .save-controls {
   margin-top: -10px;

@@ -60,6 +60,9 @@ export class Simulation {
     // === Stage 2.1: Avoid zones (точки обхода) ===
     this.avoidZones = []; // [{x, y, radius}]
     this.avoidPenalty = 1000;
+    this.randomAvoidEnabled = false;
+    this.randomAvoidCount = 2;
+    this.randomAvoidRadius = 20;
     
     this.randomizeLayout();
     this.loadBestBrain();
@@ -92,6 +95,7 @@ export class Simulation {
     
     this.currentWaypointIndex = 0;
     this.waypoints.forEach(wp => wp.passed = false);
+    if (this.randomAvoidEnabled) this.generateRandomAvoidZones(rng);
   }
   
   // === Waypoints ===
@@ -151,6 +155,29 @@ export class Simulation {
     this.avoidZones = [];
   }
   
+  // Generate new obstacles from the layout RNG, including seeded training layouts.
+  generateRandomAvoidZones(rng = Math.random) {
+    this.avoidZones = [];
+    const radius = this.randomAvoidRadius;
+    const count = this.randomAvoidCount;
+    const clearance = radius + this.boat.width + 10;
+    for (let i = 0; i < count; i++) {
+      let placed = false;
+      for (let attempt = 0; attempt < 200 && !placed; attempt++) {
+        const x = radius + 20 + rng() * (this.entryX - radius - 60);
+        const y = radius + 20 + rng() * (this.height - 2 * (radius + 20));
+        if (Math.hypot(x - this.boat.x, y - this.boat.y) < radius + 60) continue;
+        if (Math.hypot(x - this.entryX, y - this.gateY) < radius + 75) continue;
+        if (this.waypoints.some(wp => Math.hypot(x - wp.x, y - wp.y) < radius + 15)) continue;
+        if (this.avoidZones.some(zone => Math.hypot(x-zone.x,y-zone.y) < 2*radius+15)) continue;
+        if (this.isOverIsland(x,y)) continue;
+        this.avoidZones.push({x,y,radius});
+        placed = true;
+      }
+    }
+    return this.avoidZones.length;
+  }
+
   // === Навигация ===
   getNavTarget() {
     if (this.currentWaypointIndex < this.waypoints.length) {

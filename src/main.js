@@ -47,6 +47,7 @@ const avoidCount = document.getElementById('avoid-count');
 const avoidIndicator = document.getElementById('avoid-indicator');
 const btnClearAvoid = document.getElementById('btn-clear-avoid');
 const chkRandomWaypoints = document.getElementById('chk-random-waypoints');
+const chkRandomAvoid = document.getElementById('chk-random-avoid');
 
 let simSpeed = 1;
 let lastTime = 0;
@@ -76,7 +77,23 @@ btnAvoidMode.addEventListener('click', () => {
 });
 
 btnClearWaypoints.addEventListener('click', () => simulation.clearWaypoints());
-btnClearAvoid.addEventListener('click', () => simulation.clearAvoidZones());
+btnClearAvoid.addEventListener('click', () => {
+  chkRandomAvoid.checked = false;
+  simulation.randomAvoidEnabled = false;
+  simulation.clearAvoidZones();
+});
+function syncRandomAvoid() {
+  simulation.randomAvoidCount = Number(avoidCount.value);
+  simulation.randomAvoidRadius = Number(avoidRadius.value);
+  if (simulation.randomAvoidEnabled) simulation.generateRandomAvoidZones();
+}
+chkRandomAvoid.addEventListener('change', () => {
+  simulation.randomAvoidEnabled = chkRandomAvoid.checked;
+  if (simulation.randomAvoidEnabled) syncRandomAvoid();
+  else simulation.clearAvoidZones();
+});
+avoidCount.addEventListener('change', syncRandomAvoid);
+avoidRadius.addEventListener('change', syncRandomAvoid);
 
 function generateRandomWaypoints() {
   simulation.clearWaypoints();
@@ -116,6 +133,10 @@ canvas.addEventListener('click', (e) => {
     const maxCount = parseInt(waypointCount.value, 10);
     if (simulation.waypoints.length < maxCount) simulation.addWaypoint(x, y);
   } else if (clickMode === 'avoid') {
+    if (chkRandomAvoid.checked) {
+      chkRandomAvoid.checked = false;
+      simulation.randomAvoidEnabled = false;
+    }
     if (simulation.removeAvoidZoneAt(x, y)) return;
     const maxCount = parseInt(avoidCount.value, 10);
     if (simulation.avoidZones.length < maxCount) {

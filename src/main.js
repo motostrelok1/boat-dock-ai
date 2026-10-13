@@ -143,7 +143,7 @@ function updateHUD() {
   hudOutputRudder.textContent = output[0].toFixed(2);
 
   hudGeneration.textContent = simulation.generation;
-  hudBestScore.textContent = simulation.bestScore.toFixed(0);
+  hudBestScore.textContent = Number.isFinite(simulation.bestScore) ? simulation.bestScore.toFixed(0) : 'Нет данных';
 
   const saved = localStorage.getItem('boat-dock-ai-best');
   hudSaveStatus.textContent = saved ? '✓ Есть' : '✗ Нет';

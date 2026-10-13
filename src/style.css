@@ -456,3 +456,98 @@ body {
   .control-group { flex-direction: column; }
   .checkbox-label, .mode-indicator { white-space: normal; }
 }
+
+
+/* Desktop fit-to-viewport dashboard: full interface at browser zoom 100%. */
+@media (min-width: 1101px) and (min-height: 650px) {
+  #app {
+    width: 100%;
+    max-width: none;
+    min-height: 100dvh;
+    padding: 8px 12px;
+    display: flex;
+    flex-direction: column;
+    gap: 5px;
+  }
+  .simulation-container {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) clamp(240px, 20vw, 300px);
+    align-items: stretch;
+    justify-items: center;
+    flex: 1 1 auto;
+    min-height: 0;
+    width: 100%;
+    gap: 10px;
+    margin: 0;
+  }
+  #simCanvas {
+    display: block;
+    width: auto;
+    height: auto;
+    max-width: 100%;
+    max-height: min(100%, calc(100dvh - 245px));
+    aspect-ratio: 9 / 5;
+    object-fit: contain;
+    align-self: center;
+  }
+  .hud {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    width: 100%;
+    min-width: 0;
+    height: 100%;
+    max-height: calc(100dvh - 245px);
+    padding: 10px;
+    overflow-y: auto;
+  }
+  .hud-section, .hud-section:last-child {
+    margin: 0;
+    padding: 0 0 6px;
+    border-bottom: 1px solid rgba(0,255,255,.12);
+  }
+  .hud-section:last-child { border: 0; }
+  .hud-section h3 { font-size: 12px; margin: 0 0 5px; }
+  .hud-row { font-size: 12px; margin: 0 0 3px; }
+  .controls, .route-controls, .avoid-controls, .save-controls {
+    flex: 0 0 auto;
+    min-height: 38px;
+    margin: 0;
+    padding: 4px 9px;
+    gap: 8px;
+    justify-content: center;
+  }
+  .controls button, .save-controls button, .save-controls .file-btn,
+  .controls button.btn-small {
+    min-height: 30px;
+    padding: 5px 10px;
+    font-size: 11px;
+  }
+  .control-group { min-height: 30px; flex-direction: row; gap: 5px; }
+  .control-group label, .checkbox-label, .mode-indicator { font-size: 11px; }
+  .control-group select { min-height: 28px; padding: 2px 6px; }
+  .control-group input[type="range"] { width: 120px; }
+  .checkbox-label { min-height: 28px; }
+  .progress-container { margin: 0; padding: 0 8px; }
+  .instructions { margin: 0; max-width: none; font-size: 12px; }
+  .instructions summary { cursor: pointer; padding: 2px 4px; }
+  .instructions[open] {
+    position: absolute;
+    bottom: 22px;
+    right: 12px;
+    z-index: 15;
+    width: min(620px, calc(100vw - 24px));
+    padding: 12px;
+    background: #102b3a;
+    border: 1px solid #31778b;
+    border-radius: 8px;
+    max-height: 60vh;
+    overflow: auto;
+    box-shadow: 0 8px 30px #0008;
+  }
+}
+@media (max-width: 1100px), (max-height: 649px) {
+  .instructions { padding: 8px; }
+  .instructions summary { cursor: pointer; }
+  .instructions-content { padding-top: 8px; }
+}

@@ -569,3 +569,12 @@ body {
   white-space: nowrap;
 }
 .benchmark-link:hover, .benchmark-link:focus-visible { background: #08869b; }
+
+/* PR #30: keep route diagnostics readable in the HUD, not over the canvas. */
+#hud-route-deviation, #hud-route-replans, #hud-route-target, #hud-route-status {
+  text-align: right;
+  overflow-wrap: anywhere;
+}
+.hud-row:has(#hud-route-target), .hud-row:has(#hud-route-status) {
+  gap: 12px;
+}

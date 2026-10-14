@@ -436,3 +436,16 @@ test('pure pursuit cannot skip the uncaptured mandatory waypoint',()=>{
  assert.ok(g);assert.ok(g.target.x<=300+1);
  assert.equal(s.currentWaypointIndex,0);
 });
+
+test('speed remains 30 before ordinary waypoint even on sharp turn',()=>{
+ const s=fresh();s.clearWaypoints();s.clearAvoidZones();s.boat.x=200;s.boat.y=200;
+ s.waypoints=[{x:220,y:200,passed:false}];s.currentWaypointIndex=0;
+ assert.equal(s.getDockTargetSpeed(),30);
+});
+test('docking speed starts slowing before preparation and becomes 10 after capture',()=>{
+ const s=fresh();s.clearWaypoints();s.clearAvoidZones();s.entryX=900;s.gateY=500;
+ s.boat.x=650;s.boat.y=500;assert.equal(s.getDockTargetSpeed(),30);
+ s.boat.x=690;assert.equal(s.getDockTargetSpeed(),20);
+ s.dockPreparationPassed=true;assert.equal(s.getDockTargetSpeed(),10);
+ s.entrySuccess=true;assert.equal(s.getDockTargetSpeed(),10);
+});

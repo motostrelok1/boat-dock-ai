@@ -261,6 +261,12 @@ function render() {
     renderer.ctx.fillText(routeStatus, 20, 190);
     renderer.ctx.restore();
   }
+  renderer.ctx.save();
+  renderer.ctx.font='bold 13px sans-serif';
+  renderer.ctx.fillStyle=simulation.routeDeviation>65?'#ffbf47':'#80deea';
+  renderer.ctx.fillText(`Отклонение: ${simulation.routeDeviation.toFixed(1)} px | Перепланирований: ${simulation.routeRecoveryCount}`,20,210);
+  if(simulation.circlingDetected)renderer.ctx.fillText('⚠️ Обнаружена циркуляция',20,230);
+  renderer.ctx.restore();
   renderer.drawTrail(simulation.boat.trail);
   renderer.drawBoat(simulation.boat);
   renderer.drawPrediction(simulation.boat, simulation.boat.getPrediction(3));

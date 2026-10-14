@@ -293,3 +293,21 @@ test('virtual route replay rejects a boat starting in a hazard',()=>{
  assert.equal(r.valid,false);
  assert.match(r.reason,/Старт/);
 });
+
+test('boat speed is bounded and acceleration is gradual',()=>{
+ const s=fresh(),b=s.boat;
+ b.setTargetSpeed(10);b.update(1,0);
+ assert.equal(b.speed,26);
+ for(let i=0;i<10;i++)b.update(1,0);
+ assert.equal(b.speed,10);
+ b.setTargetSpeed(999);b.update(1,0);
+ assert.equal(b.targetSpeed,30);assert.equal(b.speed,14);
+ b.setTargetSpeed(-20);assert.equal(b.targetSpeed,10);
+});
+test('route speed recommendation uses course and distance',()=>{
+ const s=fresh();s.clearWaypoints();s.clearAvoidZones();
+ s.boat.x=100;s.boat.y=500;s.boat.heading=0;s.entryX=500;s.gateY=500;
+ assert.equal(s.recommendSpeed(),30);
+ s.boat.heading=Math.PI/2;assert.equal(s.recommendSpeed(),10);
+ s.boat.heading=0;s.entryX=170;assert.equal(s.recommendSpeed(),20);
+});

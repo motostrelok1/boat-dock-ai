@@ -528,33 +528,44 @@ export class Simulation {
   }
   
   getDockAlignmentGuidance() {
-    // Final approach has to be along the +X dock channel, not just touch the entry dot.
-    // Start far enough to turn even when arriving from above/below.
     const boat=this.boat;
-    if (boat.x < this.entryX - 260 || Math.abs(boat.y-this.gateY)>230) return null;
-    const alignX=this.entryX-105;
-    const headingError=Math.abs(this.normalizeAngle(boat.heading));
-    if(!this.dockApproachAligned &&
-       boat.x>=alignX-20 && boat.x<=alignX+30 &&
-       Math.abs(boat.y-this.gateY)<20 && headingError<0.4) {
-      this.dockApproachAligned=true;
+    if(boat.x<this.entryX-320 || Math.abs(boat.y-this.gateY)>240) return null;
+    // Prepare the boat well before the gate; do not chase the entry dot.
+    const stagingX=this.entryX-155;
+    const lateral=boat.y-this.gateY;
+    const headingError=this.normalizeAngle(boat.heading);
+    const ready=boat.x<=this.entryX-70 && Math.abs(lateral)<10 &&
+      Math.abs(headingError)<0.18;
+    if(ready)this.dockApproachAligned=true;
+    if(!this.entryChecked && (Math.abs(lateral)>24 || Math.abs(headingError)>0.45))
+      this.dockApproachAligned=false;
+
+    const aligned=this.dockApproachAligned;
+    let target;
+    let desired;
+    if(aligned) {
+      // Keep the boat centered on the horizontal docking corridor.
+      target={x:this.entryX+this.islandW+95,y:this.gateY};
+      desired=Math.max(-0.18,Math.min(0.18,-Math.atan2(lateral,85)));
+    } else {
+      // If the staging point was passed at an incorrect angle, turn in
+      // open water instead of circling around the entry dot.
+      const overshot=boat.x>stagingX+25;
+      target=overshot
+        ? {x:this.entryX-245,y:this.gateY+(lateral>=0?55:-55)}
+        : {x:stagingX,y:this.gateY};
+      desired=Math.atan2(target.y-boat.y,target.x-boat.x);
     }
-    // Do not make a tight last-second turn at the gate.
-    const target=this.dockApproachAligned
-      ? {x:this.entryX+75,y:this.gateY}
-      : {x:alignX,y:this.gateY};
-    // Don't replace obstacle avoidance by a straight chord through a hazard.
-    const dist=Math.hypot(target.x-boat.x,target.y-boat.y);
-    for(const zone of this.avoidZones) {
-      const steps=Math.max(1,Math.ceil(dist/5));
-      for(let i=0;i<=steps;i++){
-        const t=i/steps,x=boat.x+(target.x-boat.x)*t,y=boat.y+(target.y-boat.y)*t;
-        if(this.zoneClearance(zone,x,y,this.boat.length/2)<=0) return null;
-      }
+    // This special approach must never cut directly through an avoid zone.
+    const length=Math.hypot(target.x-boat.x,target.y-boat.y);
+    const steps=Math.max(1,Math.ceil(length/4));
+    for(const zone of this.avoidZones)for(let i=0;i<=steps;i++){
+      const t=i/steps;
+      if(this.zoneClearance(zone,boat.x+(target.x-boat.x)*t,
+        boat.y+(target.y-boat.y)*t,this.boat.length/2)<=0)return null;
     }
-    const angle=Math.atan2(target.y-boat.y,target.x-boat.x);
-    const error=this.normalizeAngle(angle-boat.heading);
-    return {rudder:Math.max(-1,Math.min(1,error*2.1)),target,aligned:this.dockApproachAligned};
+    const error=this.normalizeAngle(desired-boat.heading);
+    return {rudder:Math.max(-1,Math.min(1,error*2.2)),target,aligned};
   }
 
   getAvoidanceGuidance(dt = 0) {
@@ -711,6 +722,9 @@ export class Simulation {
       this.randomizeLayout();
     }
     this.time = 0;
+    this.dockApproachAligned = false;
+    this.routeGuidance = null;
+    this.routeGuidanceAge = 0;
     this.holding = null;
     this.notice = '';
     this.boat.speed = 30;

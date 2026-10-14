@@ -176,12 +176,14 @@ export class Simulation {
     const centers=i=>({x:(i%cols)*step,y:Math.floor(i/cols)*step});
     const targets=[...this.waypoints,{x:this.entryX,y:this.gateY}];
     let start={x:this.boat.x,y:this.boat.y};
+    const path=[{...start}];
     for(let targetIndex=0;targetIndex<targets.length;targetIndex++){
       const target=targets[targetIndex];
       if(!free(start.x,start.y)||!free(target.x,target.y))
-        return {reachable:false,reason:`Точка ${targetIndex+1} находится в запретной области`};
+        return {reachable:false,reason:`Точка ${targetIndex+1} находится в запретной области`,path:[]};
       const source=index(start.x,start.y), goal=index(target.x,target.y);
       const seen=new Uint8Array(cols*rows), queue=new Int32Array(cols*rows);
+      const parent=new Int32Array(cols*rows).fill(-1);
       let head=0,tail=0;queue[tail++]=source;seen[source]=1;
       const directions=[[1,0],[-1,0],[0,1],[0,-1],[1,1],[-1,-1],[1,-1],[-1,1]];
       const validSegment=(a,b)=>{
@@ -200,13 +202,20 @@ export class Simulation {
           if(seen[next])continue;
           const point=centers(next);
           if(!free(point.x,point.y)||!validSegment(p,point))continue;
-          seen[next]=1;queue[tail++]=next;
+          seen[next]=1;parent[next]=current;queue[tail++]=next;
         }
       }
-      if(!seen[goal]) return {reachable:false,reason:`Нет прохода к ${targetIndex<targets.length-1?'маршрутной точке '+(targetIndex+1):'входу в док'}`};
+      if(!seen[goal]) return {reachable:false,reason:`Нет прохода к ${targetIndex<targets.length-1?'маршрутной точке '+(targetIndex+1):'входу в док'}`,path:[]};
+      const section=[];
+      for(let at=goal;at!==-1;at=parent[at]){
+        section.push(centers(at));
+        if(at===source)break;
+      }
+      section.reverse();
+      path.push(...section.slice(1),{x:target.x,y:target.y});
       start=target;
     }
-    return {reachable:true,reason:null};
+    return {reachable:true,reason:null,path};
   }
 
   // A holding circle is only allowed when its entire swept path stays safe.

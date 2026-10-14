@@ -48,6 +48,18 @@ export class Renderer {
     ctx.restore();
   }
 
+  drawDockPreparation(point, passed) {
+    const ctx=this.ctx;
+    ctx.save();
+    ctx.strokeStyle='#00e676';
+    ctx.fillStyle=passed?'#00e676':'#003b27';
+    ctx.lineWidth=2;
+    ctx.beginPath();ctx.arc(point.x,point.y,8,0,Math.PI*2);ctx.fill();ctx.stroke();
+    ctx.fillStyle='#00e676';ctx.font='bold 12px sans-serif';
+    ctx.fillText('ВЫРАВНИВАНИЕ',point.x-48,point.y-15);
+    ctx.restore();
+  }
+
   drawGrid() {
     this.ctx.strokeStyle = 'rgba(0, 229, 255, 0.05)';
     this.ctx.lineWidth = 1;

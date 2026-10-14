@@ -71,6 +71,7 @@ export class Simulation {
     this.routeGuidance = null;
     this.routeGuidanceAge = 0;
     this.dockApproachAligned = false;
+    this.dockPreparationPassed = false;
     
     this.randomizeLayout();
     this.loadBestBrain();
@@ -527,32 +528,40 @@ export class Simulation {
     this.checkWaypoints(previousPosition);
   }
   
+  getDockPreparationPoint() {
+    // Three 50px grid cells before the existing green gate entry point.
+    return {x:this.entryX-150,y:this.gateY};
+  }
+
   getDockAlignmentGuidance() {
-    const b=this.boat;
-    if(b.x<this.entryX-320 || Math.abs(b.y-this.gateY)>240)return null;
+    const b=this.boat, preparation=this.getDockPreparationPoint();
+    if(b.x<this.entryX-350 || Math.abs(b.y-this.gateY)>250)return null;
     const lateral=b.y-this.gateY;
     const headingError=this.normalizeAngle(b.heading);
-    // Do not chase a single entry dot. First follow an approach corridor
-    // parallel to +X, then pass through the gate along its centerline.
-    const stagingX=this.entryX-155;
-    const ready=b.x<=this.entryX-70 && Math.abs(lateral)<9 &&
-      Math.abs(headingError)<=0.17; // < 10 degrees: leaves margin under ±17° gate rule
+    const atPreparation=Math.hypot(b.x-preparation.x,b.y-preparation.y)<=this.waypointRadius;
+    // The preparation point has no heading requirement. Once passed, the boat
+    // must align during the 150px straight lead-in to the gate.
+    if(atPreparation)this.dockPreparationPassed=true;
+    if(this.entrySuccess)this.dockApproachAligned=true;
+    const ready=this.dockPreparationPassed &&
+      b.x<this.entryX-45 && Math.abs(lateral)<9 && Math.abs(headingError)<0.17;
     if(ready)this.dockApproachAligned=true;
-    if(!this.entryChecked && (Math.abs(lateral)>20 || Math.abs(headingError)>0.45))
+    if(!this.entryChecked && (Math.abs(lateral)>23 || Math.abs(headingError)>0.5))
       this.dockApproachAligned=false;
-    const aligned=this.dockApproachAligned;
     let target,desired;
-    if(aligned || this.entrySuccess) {
-      // In the channel, steer to keep y near gateY, not to the old entry point.
+    if(this.dockApproachAligned) {
       target={x:this.islandX+this.islandW+80,y:this.gateY};
-      const correction=Math.atan2(-lateral,110);
-      desired=Math.max(-0.16,Math.min(0.16,correction));
-    } else if(b.x>stagingX+25) {
-      // Staging was overshot: return into open water BEFORE the gate.
-      target={x:this.entryX-255,y:this.gateY+(lateral>=0?60:-60)};
+      desired=Math.max(-0.16,Math.min(0.16,Math.atan2(-lateral,110)));
+    } else if(this.dockPreparationPassed && b.x<=this.entryX-35) {
+      // Track the axis after passing the first green point, not the point itself.
+      target={x:this.entryX+30,y:this.gateY};
+      desired=Math.atan2(-lateral,Math.max(60,this.entryX-b.x));
+    } else if(b.x>preparation.x+25) {
+      // Missed staging/heading: make space for another approach in open water.
+      target={x:this.entryX-260,y:this.gateY+(lateral>=0?65:-65)};
       desired=Math.atan2(target.y-b.y,target.x-b.x);
     } else {
-      target={x:stagingX,y:this.gateY};
+      target=preparation;
       desired=Math.atan2(target.y-b.y,target.x-b.x);
     }
     const length=Math.hypot(target.x-b.x,target.y-b.y);
@@ -563,7 +572,8 @@ export class Simulation {
         b.y+(target.y-b.y)*t,b.length/2)<=0)return null;
     }
     const error=this.normalizeAngle(desired-b.heading);
-    return {rudder:Math.max(-1,Math.min(1,error*2.2)),target,aligned};
+    return {rudder:Math.max(-1,Math.min(1,error*2.2)),target,
+      aligned:this.dockApproachAligned,preparationPassed:this.dockPreparationPassed};
   }
 
   getAvoidanceGuidance(dt = 0) {
@@ -721,6 +731,7 @@ export class Simulation {
     }
     this.time = 0;
     this.dockApproachAligned = false;
+    this.dockPreparationPassed = false;
     this.routeGuidance = null;
     this.routeGuidanceAge = 0;
     this.holding = null;

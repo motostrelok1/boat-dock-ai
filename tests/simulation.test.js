@@ -339,14 +339,14 @@ test('dock alignment targets a staging point when approaching from above',()=>{
  s.entryX=900;s.gateY=500;s.boat.x=790;s.boat.y=390;s.boat.heading=1;
  const g=s.getDockAlignmentGuidance();
  assert.ok(g);assert.equal(g.aligned,false);
- assert.ok(g.target.x<790);assert.ok(g.target.y>=500);
+ assert.ok(g.target.x<790);assert.equal(g.target.y,440);
 });
 test('dock alignment targets a staging point when approaching from below',()=>{
  const s=fresh();s.clearWaypoints();s.clearAvoidZones();
  s.entryX=900;s.gateY=500;s.boat.x=790;s.boat.y=610;s.boat.heading=-1;
  const g=s.getDockAlignmentGuidance();
  assert.ok(g);assert.equal(g.aligned,false);
- assert.equal(g.target.y,500);
+ assert.equal(g.target.y,560);
 });
 test('once aligned, dock approach aims through gate, not at entry dot',()=>{
  const s=fresh();s.clearWaypoints();s.clearAvoidZones();

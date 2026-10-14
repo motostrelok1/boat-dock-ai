@@ -51,7 +51,7 @@ export function planHeadingRoute(sim, options = {}) {
           trail.push({x,y});
         }
         if(!valid)continue;
-        const next={x,y,heading:h,g:node.g+speed*stepTime+Math.abs(rudder)*3 + Math.abs(rudder-node.rudder)*9,
+        const next={x,y,heading:h,g:node.g+speed*stepTime+Math.abs(rudder)*0.8 + Math.abs(rudder-node.rudder)*2,
           parent:node,trail,rudder};
         const nk=key(next);
         if(best.has(nk)&&best.get(nk)<=next.g)continue;

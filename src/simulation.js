@@ -187,8 +187,9 @@ export class Simulation {
       let head=0,tail=0;queue[tail++]=source;seen[source]=1;
       const directions=[[1,0],[-1,0],[0,1],[0,-1],[1,1],[-1,-1],[1,-1],[-1,1]];
       const validSegment=(a,b)=>{
-        for(let j=1;j<=4;j++){
-          const t=j/4;
+        const steps=Math.max(1,Math.ceil(Math.hypot(b.x-a.x,b.y-a.y)/4));
+        for(let j=1;j<=steps;j++){
+          const t=j/steps;
           if(!free(a.x+(b.x-a.x)*t,a.y+(b.y-a.y)*t))return false;
         }
         return true;
@@ -212,7 +213,20 @@ export class Simulation {
         if(at===source)break;
       }
       section.reverse();
-      path.push(...section.slice(1),{x:target.x,y:target.y});
+      // Remove grid stair-steps only when each longer straight segment is collision-free.
+      // Preserve each mandatory waypoint as the end of its own section.
+      const raw=[start,...section.slice(1),target];
+      const simplified=[raw[0]];
+      let at=0;
+      while(at<raw.length-1){
+        let furthest=at+1;
+        for(let candidate=raw.length-1;candidate>at+1;candidate--){
+          if(validSegment(raw[at],raw[candidate])){furthest=candidate;break;}
+        }
+        simplified.push(raw[furthest]);
+        at=furthest;
+      }
+      path.push(...simplified.slice(1).map(p=>({x:p.x,y:p.y})));
       start=target;
     }
     return {reachable:true,reason:null,path};

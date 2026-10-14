@@ -521,40 +521,49 @@ export class Simulation {
     const guided = this.aiEnabled && !this.trainingActive && this.avoidZones.length && this.routeGuidance?.path.length;
     const dockGuidance = this.aiEnabled && !this.trainingActive && this.currentWaypointIndex>=this.waypoints.length
       ? this.getDockAlignmentGuidance() : null;
-    this.boat.setTargetSpeed(dockGuidance ? (dockGuidance.aligned ? 10 : 20) : guided ? this.guidanceSpeed() : this.recommendSpeed());
+    this.boat.setTargetSpeed(dockGuidance ? (dockGuidance.aligned || this.entrySuccess ? 10 : 20) : guided ? this.guidanceSpeed() : this.recommendSpeed());
     const previousPosition = {x:this.boat.x, y:this.boat.y};
     this.boat.update(dt, rudder);
     this.checkWaypoints(previousPosition);
   }
   
   getDockAlignmentGuidance() {
-    // Final approach has to be along the +X dock channel, not just touch the entry dot.
-    // Start far enough to turn even when arriving from above/below.
-    const boat=this.boat;
-    if (boat.x < this.entryX - 260 || Math.abs(boat.y-this.gateY)>230) return null;
-    const alignX=this.entryX-105;
-    const headingError=Math.abs(this.normalizeAngle(boat.heading));
-    if(!this.dockApproachAligned &&
-       boat.x>=alignX-20 && boat.x<=alignX+30 &&
-       Math.abs(boat.y-this.gateY)<20 && headingError<0.4) {
-      this.dockApproachAligned=true;
+    const b=this.boat;
+    if(b.x<this.entryX-320 || Math.abs(b.y-this.gateY)>240)return null;
+    const lateral=b.y-this.gateY;
+    const headingError=this.normalizeAngle(b.heading);
+    // Do not chase a single entry dot. First follow an approach corridor
+    // parallel to +X, then pass through the gate along its centerline.
+    const stagingX=this.entryX-155;
+    const ready=b.x<=this.entryX-70 && Math.abs(lateral)<9 &&
+      Math.abs(headingError)<=0.17; // < 10 degrees: leaves margin under ±17° gate rule
+    if(ready)this.dockApproachAligned=true;
+    if(!this.entryChecked && (Math.abs(lateral)>20 || Math.abs(headingError)>0.45))
+      this.dockApproachAligned=false;
+    const aligned=this.dockApproachAligned;
+    let target,desired;
+    if(aligned || this.entrySuccess) {
+      // In the channel, steer to keep y near gateY, not to the old entry point.
+      target={x:this.islandX+this.islandW+80,y:this.gateY};
+      const correction=Math.atan2(-lateral,110);
+      desired=Math.max(-0.16,Math.min(0.16,correction));
+    } else if(b.x>stagingX+25) {
+      // Staging was overshot: return into open water BEFORE the gate.
+      target={x:this.entryX-255,y:this.gateY+(lateral>=0?60:-60)};
+      desired=Math.atan2(target.y-b.y,target.x-b.x);
+    } else {
+      target={x:stagingX,y:this.gateY};
+      desired=Math.atan2(target.y-b.y,target.x-b.x);
     }
-    // Do not make a tight last-second turn at the gate.
-    const target=this.dockApproachAligned
-      ? {x:this.entryX+75,y:this.gateY}
-      : {x:alignX,y:this.gateY};
-    // Don't replace obstacle avoidance by a straight chord through a hazard.
-    const dist=Math.hypot(target.x-boat.x,target.y-boat.y);
-    for(const zone of this.avoidZones) {
-      const steps=Math.max(1,Math.ceil(dist/5));
-      for(let i=0;i<=steps;i++){
-        const t=i/steps,x=boat.x+(target.x-boat.x)*t,y=boat.y+(target.y-boat.y)*t;
-        if(this.zoneClearance(zone,x,y,this.boat.length/2)<=0) return null;
-      }
+    const length=Math.hypot(target.x-b.x,target.y-b.y);
+    const steps=Math.max(1,Math.ceil(length/4));
+    for(const z of this.avoidZones)for(let i=0;i<=steps;i++){
+      const t=i/steps;
+      if(this.zoneClearance(z,b.x+(target.x-b.x)*t,
+        b.y+(target.y-b.y)*t,b.length/2)<=0)return null;
     }
-    const angle=Math.atan2(target.y-boat.y,target.x-boat.x);
-    const error=this.normalizeAngle(angle-boat.heading);
-    return {rudder:Math.max(-1,Math.min(1,error*2.1)),target,aligned:this.dockApproachAligned};
+    const error=this.normalizeAngle(desired-b.heading);
+    return {rudder:Math.max(-1,Math.min(1,error*2.2)),target,aligned};
   }
 
   getAvoidanceGuidance(dt = 0) {
@@ -711,6 +720,9 @@ export class Simulation {
       this.randomizeLayout();
     }
     this.time = 0;
+    this.dockApproachAligned = false;
+    this.routeGuidance = null;
+    this.routeGuidanceAge = 0;
     this.holding = null;
     this.notice = '';
     this.boat.speed = 30;

@@ -76,6 +76,7 @@ export class Simulation {
   randomizeLayout(rng = Math.random) {
     this.holding = null;
     this.boat.speed = 30;
+    this.boat.setTargetSpeed(30);
     this.notice = '';
     if (this.randomAvoidEnabled) this.avoidZones = [];
     this.islandW = 120 + rng() * 80;
@@ -416,12 +417,12 @@ export class Simulation {
     if (!this.running || this.finished) return;
     if(this.holding){
       const slice=Math.min(dt,this.holding.remaining);
-      this.boat.speed=10;
+      this.boat.setTargetSpeed(10);
       this.boat.update(slice,this.holding.rudder);
       this.time+=slice;
       this.holding.remaining-=slice;
       if(this.holding.remaining<=0){
-        this.boat.speed=this.holding.previousSpeed;
+        this.boat.setTargetSpeed(this.holding.previousSpeed);
         this.holding=null;
         this.clearAvoidZones();
         this.notice='✅ 10 секунд прошло. Запретные зоны удалены, продолжаем маршрут';
@@ -501,11 +502,26 @@ export class Simulation {
     
     this.prevDist = currDist;
     
+    // Existing 6→8→1 networks keep controlling only the rudder.
+    // A separate route-aware speed recommendation governs target speed until
+    // a new two-output network is explicitly introduced.
+    this.boat.setTargetSpeed(this.recommendSpeed());
     const previousPosition = {x:this.boat.x, y:this.boat.y};
     this.boat.update(dt, rudder);
     this.checkWaypoints(previousPosition);
   }
   
+  recommendSpeed() {
+    const target = this.getNavTarget();
+    const distance = Math.hypot(target.x-this.boat.x,target.y-this.boat.y);
+    const bearing = Math.atan2(target.y-this.boat.y,target.x-this.boat.x);
+    const turn = Math.abs(this.normalizeAngle(bearing-this.boat.heading));
+    // Slow for large course changes and near docking or the next waypoint.
+    if (turn > 0.7 || distance < 45) return 10;
+    if (turn > 0.3 || distance < 95) return 20;
+    return 30;
+  }
+
   checkWaypoints(previousPosition = null) {
     if (this.currentWaypointIndex >= this.waypoints.length) return;
     

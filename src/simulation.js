@@ -68,6 +68,8 @@ export class Simulation {
     this.safetyMargin = 12;
     this.holding = null;
     this.notice = '';
+    this.routeGuidance = null;
+    this.routeGuidanceAge = 0;
     
     this.randomizeLayout();
     this.loadBestBrain();
@@ -75,6 +77,8 @@ export class Simulation {
   
   randomizeLayout(rng = Math.random) {
     this.holding = null;
+    this.routeGuidance = null;
+    this.routeGuidanceAge = 0;
     this.boat.speed = 30;
     this.boat.setTargetSpeed(30);
     this.notice = '';
@@ -473,6 +477,10 @@ export class Simulation {
       const inputs = this.getInputs();
       const output = this.nn.forward(inputs);
       rudder = output[0];
+      if (!this.trainingActive && this.avoidZones.length) {
+        const guidance = this.getAvoidanceGuidance(dt);
+        if (guidance) rudder = guidance.rudder;
+      }
     } else {
       // Ручной режим: сохраняем руль, заданный со стрелок (boat.rudderAngle)
       rudder = this.boat.rudderAngle;
@@ -505,12 +513,50 @@ export class Simulation {
     // Existing 6→8→1 networks keep controlling only the rudder.
     // A separate route-aware speed recommendation governs target speed until
     // a new two-output network is explicitly introduced.
-    this.boat.setTargetSpeed(this.recommendSpeed());
+    const guided = this.aiEnabled && !this.trainingActive && this.avoidZones.length && this.routeGuidance?.path.length;
+    this.boat.setTargetSpeed(guided ? this.guidanceSpeed() : this.recommendSpeed());
     const previousPosition = {x:this.boat.x, y:this.boat.y};
     this.boat.update(dt, rudder);
     this.checkWaypoints(previousPosition);
   }
   
+  getAvoidanceGuidance(dt = 0) {
+    const key = JSON.stringify({
+      index:this.currentWaypointIndex,
+      zones:this.avoidZones.map(z=>[z.x,z.y,z.radius]),
+      points:this.waypoints.slice(this.currentWaypointIndex).map(p=>[p.x,p.y]),
+      dock:[this.entryX,this.gateY]
+    });
+    this.routeGuidanceAge = (this.routeGuidanceAge || 0) + dt;
+    if (!this.routeGuidance || this.routeGuidance.key !== key || this.routeGuidanceAge >= 3) {
+      this.routeGuidanceAge = 0;
+      const plan = this.getRouteReachability();
+      this.routeGuidance = {key,path:plan.reachable?plan.path:[],index:0};
+    }
+    const route=this.routeGuidance;
+    if (!route.path.length) return null;
+    const boat=this.boat;
+    while(route.index<route.path.length-2) {
+      const p=route.path[route.index+1];
+      if(Math.hypot(p.x-boat.x,p.y-boat.y)<17)route.index++;
+      else break;
+    }
+    const target=route.path[Math.min(route.index+1,route.path.length-1)];
+    const bearing=Math.atan2(target.y-boat.y,target.x-boat.x);
+    const error=this.normalizeAngle(bearing-boat.heading);
+    return {rudder:Math.max(-1,Math.min(1,error*2.3)),target};
+  }
+
+  guidanceSpeed() {
+    const route=this.routeGuidance;
+    if(!route?.path.length)return this.recommendSpeed();
+    const target=route.path[Math.min(route.index+1,route.path.length-1)];
+    const bearing=Math.atan2(target.y-this.boat.y,target.x-this.boat.x);
+    const error=Math.abs(this.normalizeAngle(bearing-this.boat.heading));
+    const distance=Math.hypot(target.x-this.boat.x,target.y-this.boat.y);
+    return error>0.6||distance<35?10:error>0.25||distance<75?20:30;
+  }
+
   recommendSpeed() {
     const target = this.getNavTarget();
     const distance = Math.hypot(target.x-this.boat.x,target.y-this.boat.y);

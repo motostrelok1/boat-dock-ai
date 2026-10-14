@@ -1,6 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { Simulation } from '../src/simulation.js';
+import { smoothSafeRoute } from '../src/routeSmoothing.js';
 import { planHeadingRoute } from '../src/headingPlanner.js';
 import { NeuralNetwork } from '../src/neuralNetwork.js';
 
@@ -229,4 +230,21 @@ test('geometric shortcut does not cross an avoid zone',()=>{
    assert.ok(s.zoneClearance(s.avoidZones[0],x,y,s.boat.length/2)>0);
   }
  }
+});
+
+test('smoothing keeps mandatory route endpoints and rounds a clear bend',()=>{
+ const s=fresh();s.clearWaypoints();s.clearAvoidZones();
+ s.islandX=1600;s.islandY=100;s.islandW=100;s.islandH=200;
+ const original=[{x:100,y:200},{x:250,y:200},{x:250,y:350}];
+ const result=smoothSafeRoute(s,original);
+ assert.deepEqual(result[0],original[0]);
+ assert.deepEqual(result.at(-1),original.at(-1));
+ assert.ok(result.length>3);
+});
+test('smoothing preserves a corner if rounding would cross a hazard',()=>{
+ const s=fresh();s.clearWaypoints();s.clearAvoidZones();
+ s.avoidZones=[{x:244,y:206,radius:4}];
+ const original=[{x:100,y:200},{x:250,y:200},{x:250,y:350}];
+ const result=smoothSafeRoute(s,original);
+ assert.ok(result.some(p=>p.x===250&&p.y===200));
 });

@@ -1,3 +1,4 @@
+import { smoothSafeRoute } from './routeSmoothing.js';
 import { planHeadingRoute } from './headingPlanner.js';
 import { Renderer } from './renderer.js';
 import { Simulation } from './simulation.js';
@@ -211,8 +212,8 @@ function getPlannedRoute() {
         plannedRoute = result.path;
         routeStatus = 'Маршрут с учётом поворотов';
       } else {
-        plannedRoute = connectivity.path;
-        routeStatus = 'Упрощённый безопасный обход — повороты не проверены';
+        plannedRoute = smoothSafeRoute(simulation, connectivity.path);
+        routeStatus = 'Сглаженный обход — повороты требуют проверки';
       }
     }
   }

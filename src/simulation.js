@@ -181,7 +181,9 @@ export class Simulation {
     const index=(x,y)=>Math.max(0,Math.min(cols-1,Math.round(x/step)))+
       cols*Math.max(0,Math.min(rows-1,Math.round(y/step)));
     const centers=i=>({x:(i%cols)*step,y:Math.floor(i/cols)*step});
-    const targets=[...this.waypoints.slice(this.currentWaypointIndex),{x:this.entryX,y:this.gateY}];
+    const targets=[...this.waypoints.slice(this.currentWaypointIndex),
+      ...(!this.dockPreparationPassed ? [this.getDockPreparationPoint()] : []),
+      {x:this.entryX,y:this.gateY}];
     let start={x:this.boat.x,y:this.boat.y};
     const path=[{...start}];
     for(let targetIndex=0;targetIndex<targets.length;targetIndex++){

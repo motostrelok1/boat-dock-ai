@@ -449,3 +449,12 @@ test('docking speed starts slowing before preparation and becomes 10 after captu
  s.dockPreparationPassed=true;assert.equal(s.getDockTargetSpeed(),10);
  s.entrySuccess=true;assert.equal(s.getDockTargetSpeed(),10);
 });
+
+test('large deviation invalidates route cache without skipping waypoint',()=>{
+ const s=fresh();s.clearWaypoints();s.clearAvoidZones();s.boat.x=150;s.boat.y=700;
+ s.waypoints=[{x:350,y:500,passed:false}];s.currentWaypointIndex=0;
+ s.routeGuidance={path:[{x:100,y:100},{x:500,y:100}],index:0};s.routeGuidanceAge=3;
+ s.updateRouteDiagnostics(.1);
+ assert.equal(s.routeGuidance,null);assert.equal(s.currentWaypointIndex,0);
+ assert.equal(s.routeRecoveryCount,1);
+});

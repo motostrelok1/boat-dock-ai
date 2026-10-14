@@ -7,7 +7,11 @@ export class Boat {
     this.x = x;
     this.y = y;
     this.heading = 0;
+    this.minSpeed = 10;
+    this.maxSpeed = 30;
     this.speed = 30;
+    this.targetSpeed = 30;
+    this.acceleration = 4; // px/s²; speed changes smoothly
     this.maxTurnRate = 1.2;
     this.rudderAngle = 0;
     this.length = 30;
@@ -16,7 +20,15 @@ export class Boat {
     this.maxTrailLength = 200;
   }
   
+  setTargetSpeed(value) {
+    this.targetSpeed = Math.max(this.minSpeed, Math.min(this.maxSpeed, Number.isFinite(value) ? value : this.maxSpeed));
+  }
+
   update(dt, rudderCmd) {
+    const delta = this.targetSpeed - this.speed;
+    const maxChange = this.acceleration * Math.max(0, dt);
+    this.speed = Math.max(this.minSpeed, Math.min(this.maxSpeed,
+      this.speed + Math.max(-maxChange, Math.min(maxChange, delta))));
     this.rudderAngle = Math.max(-1, Math.min(1, rudderCmd));
     
     const turnRate = this.rudderAngle * this.maxTurnRate;
@@ -46,6 +58,7 @@ export class Boat {
       y: this.y,
       heading: this.heading,
       speed: this.speed,
+      targetSpeed: this.targetSpeed,
       rudderAngle: this.rudderAngle
     };
   }
@@ -55,6 +68,8 @@ export class Boat {
     this.y = y;
     this.heading = 0;
     this.rudderAngle = 0;
+    this.speed = 30;
+    this.targetSpeed = 30;
     this.trail = [];
   }
 }

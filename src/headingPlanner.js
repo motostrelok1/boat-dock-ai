@@ -27,7 +27,7 @@ export function planHeadingRoute(sim, options = {}) {
     const target=targets[segment];
     if(!free(start.x,start.y)||!free(target.x,target.y))
       return {reachable:false,path:[],reason:'Маршрут перекрыт препятствием',explored};
-    const open=[{...start,g:0,f:heuristic(start,target),parent:null,trail:[]}];
+    const open=[{...start,g:0,f:heuristic(start,target),parent:null,trail:[],rudder:0}];
     const best=new Map();
     let goal=null, iterations=0;
     while(open.length && iterations++<maxNodes){
@@ -51,8 +51,8 @@ export function planHeadingRoute(sim, options = {}) {
           trail.push({x,y});
         }
         if(!valid)continue;
-        const next={x,y,heading:h,g:node.g+speed*stepTime+Math.abs(rudder)*0.15,
-          parent:node,trail};
+        const next={x,y,heading:h,g:node.g+speed*stepTime+Math.abs(rudder)*3 + Math.abs(rudder-node.rudder)*9,
+          parent:node,trail,rudder};
         const nk=key(next);
         if(best.has(nk)&&best.get(nk)<=next.g)continue;
         best.set(nk,next.g);

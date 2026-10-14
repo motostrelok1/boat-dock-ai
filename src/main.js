@@ -175,8 +175,9 @@ let lastRouteKey = '';
 let plannedRoute = [];
 function getPlannedRoute() {
   const key = JSON.stringify({
-    start: [simulation.boat.trail[0]?.x ?? simulation.boat.x, simulation.boat.trail[0]?.y ?? simulation.boat.y, simulation.boat.heading],
-    targets: simulation.waypoints.map(p => [p.x,p.y]),
+    start: [simulation.boat.x, simulation.boat.y, simulation.boat.heading],
+    waypointIndex: simulation.currentWaypointIndex,
+    targets: simulation.waypoints.slice(simulation.currentWaypointIndex).map(p => [p.x,p.y]),
     zones: simulation.avoidZones.map(z => [z.x,z.y,z.radius]),
     dock: [simulation.entryX,simulation.gateY,simulation.islandX,simulation.islandY]
   });

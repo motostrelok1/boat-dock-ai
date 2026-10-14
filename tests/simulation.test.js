@@ -177,3 +177,23 @@ test('heading planner rejects obstructed starting point',()=>{
  s.avoidZones=[{x:100,y:500,radius:35}];
  assert.equal(planHeadingRoute(s).reachable,false);
 });
+
+test('geometric planner omits already passed waypoints',()=>{
+ const s=fresh();s.clearWaypoints();s.clearAvoidZones();
+ s.boat.x=250;s.boat.y=500;
+ s.waypoints=[{x:100,y:500,passed:true},{x:400,y:500,passed:false}];
+ s.currentWaypointIndex=1;
+ const r=s.getRouteReachability();
+ assert.equal(r.reachable,true);
+ assert.ok(r.path.some(p=>p.x===400&&p.y===500));
+ assert.ok(!r.path.some(p=>p.x===100&&p.y===500));
+});
+test('heading planner ignores already passed waypoint',()=>{
+ const s=fresh();s.clearWaypoints();s.clearAvoidZones();
+ s.boat.x=150;s.boat.y=500;s.boat.heading=0;
+ s.entryX=390;s.gateY=500;s.islandX=450;s.islandY=50;s.islandH=300;s.islandW=150;
+ s.waypoints=[{x:100,y:500,passed:true}];s.currentWaypointIndex=1;
+ const r=planHeadingRoute(s,{maxNodes:4000});
+ assert.equal(r.reachable,true);
+ assert.ok(r.path.every(p=>p.x>100));
+});

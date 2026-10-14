@@ -521,50 +521,48 @@ export class Simulation {
     const guided = this.aiEnabled && !this.trainingActive && this.avoidZones.length && this.routeGuidance?.path.length;
     const dockGuidance = this.aiEnabled && !this.trainingActive && this.currentWaypointIndex>=this.waypoints.length
       ? this.getDockAlignmentGuidance() : null;
-    this.boat.setTargetSpeed(dockGuidance ? (dockGuidance.aligned ? 10 : 20) : guided ? this.guidanceSpeed() : this.recommendSpeed());
+    this.boat.setTargetSpeed(dockGuidance ? (dockGuidance.aligned || this.entrySuccess ? 10 : 20) : guided ? this.guidanceSpeed() : this.recommendSpeed());
     const previousPosition = {x:this.boat.x, y:this.boat.y};
     this.boat.update(dt, rudder);
     this.checkWaypoints(previousPosition);
   }
   
   getDockAlignmentGuidance() {
-    const boat=this.boat;
-    if(boat.x<this.entryX-320 || Math.abs(boat.y-this.gateY)>240) return null;
-    // Prepare the boat well before the gate; do not chase the entry dot.
+    const b=this.boat;
+    if(b.x<this.entryX-320 || Math.abs(b.y-this.gateY)>240)return null;
+    const lateral=b.y-this.gateY;
+    const headingError=this.normalizeAngle(b.heading);
+    // Do not chase a single entry dot. First follow an approach corridor
+    // parallel to +X, then pass through the gate along its centerline.
     const stagingX=this.entryX-155;
-    const lateral=boat.y-this.gateY;
-    const headingError=this.normalizeAngle(boat.heading);
-    const ready=boat.x<=this.entryX-70 && Math.abs(lateral)<10 &&
-      Math.abs(headingError)<0.18;
+    const ready=b.x<=this.entryX-70 && Math.abs(lateral)<9 &&
+      Math.abs(headingError)<=0.17; // < 10 degrees: leaves margin under ±17° gate rule
     if(ready)this.dockApproachAligned=true;
-    if(!this.entryChecked && (Math.abs(lateral)>24 || Math.abs(headingError)>0.45))
+    if(!this.entryChecked && (Math.abs(lateral)>20 || Math.abs(headingError)>0.45))
       this.dockApproachAligned=false;
-
     const aligned=this.dockApproachAligned;
-    let target;
-    let desired;
-    if(aligned) {
-      // Keep the boat centered on the horizontal docking corridor.
-      target={x:this.entryX+this.islandW+95,y:this.gateY};
-      desired=Math.max(-0.18,Math.min(0.18,-Math.atan2(lateral,85)));
+    let target,desired;
+    if(aligned || this.entrySuccess) {
+      // In the channel, steer to keep y near gateY, not to the old entry point.
+      target={x:this.islandX+this.islandW+80,y:this.gateY};
+      const correction=Math.atan2(-lateral,110);
+      desired=Math.max(-0.16,Math.min(0.16,correction));
+    } else if(b.x>stagingX+25) {
+      // Staging was overshot: return into open water BEFORE the gate.
+      target={x:this.entryX-255,y:this.gateY+(lateral>=0?60:-60)};
+      desired=Math.atan2(target.y-b.y,target.x-b.x);
     } else {
-      // If the staging point was passed at an incorrect angle, turn in
-      // open water instead of circling around the entry dot.
-      const overshot=boat.x>stagingX+25;
-      target=overshot
-        ? {x:this.entryX-245,y:this.gateY+(lateral>=0?55:-55)}
-        : {x:stagingX,y:this.gateY};
-      desired=Math.atan2(target.y-boat.y,target.x-boat.x);
+      target={x:stagingX,y:this.gateY};
+      desired=Math.atan2(target.y-b.y,target.x-b.x);
     }
-    // This special approach must never cut directly through an avoid zone.
-    const length=Math.hypot(target.x-boat.x,target.y-boat.y);
+    const length=Math.hypot(target.x-b.x,target.y-b.y);
     const steps=Math.max(1,Math.ceil(length/4));
-    for(const zone of this.avoidZones)for(let i=0;i<=steps;i++){
+    for(const z of this.avoidZones)for(let i=0;i<=steps;i++){
       const t=i/steps;
-      if(this.zoneClearance(zone,boat.x+(target.x-boat.x)*t,
-        boat.y+(target.y-boat.y)*t,this.boat.length/2)<=0)return null;
+      if(this.zoneClearance(z,b.x+(target.x-b.x)*t,
+        b.y+(target.y-b.y)*t,b.length/2)<=0)return null;
     }
-    const error=this.normalizeAngle(desired-boat.heading);
+    const error=this.normalizeAngle(desired-b.heading);
     return {rudder:Math.max(-1,Math.min(1,error*2.2)),target,aligned};
   }
 

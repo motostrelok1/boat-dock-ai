@@ -333,3 +333,30 @@ test('avoidance guidance invalidates cached route when an obstacle changes',()=>
  s.avoidZones[0].radius=55;s.getAvoidanceGuidance(0.05);
  assert.notEqual(first,s.routeGuidance.key);
 });
+
+test('dock alignment targets a staging point when approaching from above',()=>{
+ const s=fresh();s.clearWaypoints();s.clearAvoidZones();
+ s.entryX=900;s.gateY=500;s.boat.x=790;s.boat.y=390;s.boat.heading=1;
+ const g=s.getDockAlignmentGuidance();
+ assert.ok(g);assert.equal(g.aligned,false);
+ assert.equal(g.target.x,795);assert.equal(g.target.y,500);
+});
+test('dock alignment targets a staging point when approaching from below',()=>{
+ const s=fresh();s.clearWaypoints();s.clearAvoidZones();
+ s.entryX=900;s.gateY=500;s.boat.x=790;s.boat.y=610;s.boat.heading=-1;
+ const g=s.getDockAlignmentGuidance();
+ assert.ok(g);assert.equal(g.aligned,false);
+ assert.equal(g.target.y,500);
+});
+test('once aligned, dock approach aims through gate, not at entry dot',()=>{
+ const s=fresh();s.clearWaypoints();s.clearAvoidZones();
+ s.entryX=900;s.gateY=500;s.boat.x=795;s.boat.y=500;s.boat.heading=0.05;
+ const g=s.getDockAlignmentGuidance();
+ assert.ok(g.aligned);assert.equal(g.target.x,975);
+});
+test('dock alignment declines unsafe straight chord through avoid zone',()=>{
+ const s=fresh();s.clearWaypoints();s.clearAvoidZones();
+ s.entryX=900;s.gateY=500;s.boat.x=700;s.boat.y=500;s.boat.heading=0;
+ s.avoidZones=[{x:750,y:500,radius:20}];
+ assert.equal(s.getDockAlignmentGuidance(),null);
+});

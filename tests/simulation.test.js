@@ -102,7 +102,10 @@ test('overlapping manual zone triggers safe 10-second movement and removal',()=>
   for(let i=0;i<200;i++)s.update(0.05);
   assert.equal(s.holding,null);
   assert.equal(s.avoidZones.length,0);
-  assert.equal(s.boat.speed,30);
+  assert.equal(s.boat.targetSpeed,30);
+  assert.equal(s.boat.speed,10);
+  s.update(0.05);
+  assert.ok(s.boat.speed>10 && s.boat.speed<=10.2+1e-8);
   assert.equal(s.finished,false);
 });
 test('no safe holding loop removes zones without sending boat through danger',()=>{

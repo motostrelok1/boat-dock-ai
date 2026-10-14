@@ -481,7 +481,7 @@ export class Simulation {
       const inputs = this.getInputs();
       const output = this.nn.forward(inputs);
       rudder = output[0];
-      if (!this.trainingActive && this.avoidZones.length) {
+      if (!this.trainingActive) {
         const guidance = this.getAvoidanceGuidance(dt);
         if (guidance) rudder = guidance.rudder;
       }
@@ -521,7 +521,7 @@ export class Simulation {
     // Existing 6→8→1 networks keep controlling only the rudder.
     // A separate route-aware speed recommendation governs target speed until
     // a new two-output network is explicitly introduced.
-    const guided = this.aiEnabled && !this.trainingActive && this.avoidZones.length && this.routeGuidance?.path.length;
+    const guided = this.aiEnabled && !this.trainingActive && this.routeGuidance?.path.length;
     const dockGuidance = this.aiEnabled && !this.trainingActive && this.currentWaypointIndex>=this.waypoints.length
       ? this.getDockAlignmentGuidance() : null;
     this.boat.setTargetSpeed(dockGuidance ? (dockGuidance.aligned || this.entrySuccess ? 10 : 20) : guided ? this.guidanceSpeed() : this.recommendSpeed());
@@ -580,29 +580,47 @@ export class Simulation {
 
   getAvoidanceGuidance(dt = 0) {
     const key = JSON.stringify({
-      index:this.currentWaypointIndex,
+      index:this.currentWaypointIndex,preparation:this.dockPreparationPassed,
       zones:this.avoidZones.map(z=>[z.x,z.y,z.radius]),
       points:this.waypoints.slice(this.currentWaypointIndex).map(p=>[p.x,p.y]),
-      dock:[this.entryX,this.gateY]
+      dock:[this.entryX,this.gateY,this.islandX,this.islandY,this.islandW,this.islandH]
     });
-    this.routeGuidanceAge = (this.routeGuidanceAge || 0) + dt;
-    if (!this.routeGuidance || this.routeGuidance.key !== key || this.routeGuidanceAge >= 3) {
-      this.routeGuidanceAge = 0;
-      const plan = this.getRouteReachability();
-      this.routeGuidance = {key,path:plan.reachable?plan.path:[],index:0};
+    this.routeGuidanceAge=(this.routeGuidanceAge||0)+dt;
+    if(!this.routeGuidance || this.routeGuidance.key!==key || this.routeGuidanceAge>=5) {
+      const plan=this.getRouteReachability();
+      this.routeGuidance={key,path:plan.reachable?plan.path:[],index:0};
+      this.routeGuidanceAge=0;
     }
     const route=this.routeGuidance;
-    if (!route.path.length) return null;
-    const boat=this.boat;
-    while(route.index<route.path.length-2) {
-      const p=route.path[route.index+1];
-      if(Math.hypot(p.x-boat.x,p.y-boat.y)<17)route.index++;
-      else break;
+    if(route.path.length<2)return null;
+    const b=this.boat;
+    // Progress along segments (not nearest vertex), never reverse on a hairpin.
+    let bestIndex=route.index,bestDist=Infinity,bestT=0;
+    for(let i=route.index;i<route.path.length-1;i++){
+      const a=route.path[i],c=route.path[i+1];
+      const dx=c.x-a.x,dy=c.y-a.y,len2=dx*dx+dy*dy;
+      const t=len2?Math.max(0,Math.min(1,((b.x-a.x)*dx+(b.y-a.y)*dy)/len2)):0;
+      const d=Math.hypot(b.x-a.x-t*dx,b.y-a.y-t*dy);
+      if(d<bestDist){bestDist=d;bestIndex=i;bestT=t;}
     }
-    const target=route.path[Math.min(route.index+1,route.path.length-1)];
-    const bearing=Math.atan2(target.y-boat.y,target.x-boat.x);
-    const error=this.normalizeAngle(bearing-boat.heading);
-    return {rudder:Math.max(-1,Math.min(1,error*2.3)),target};
+    route.index=Math.max(route.index,bestIndex);
+    // Pure pursuit: aim forward by ~1-2 boat lengths, not at the next
+    // sampled point. Avoid skipping mandatory 18px waypoint capture.
+    let ahead=35 + b.speed*0.3;
+    let i=route.index;
+    let from={x:route.path[i].x+(route.path[i+1].x-route.path[i].x)*(i===bestIndex?bestT:0),
+      y:route.path[i].y+(route.path[i+1].y-route.path[i].y)*(i===bestIndex?bestT:0)};
+    let target=route.path.at(-1);
+    for(;i<route.path.length-1;i++){
+      const next=route.path[i+1],length=Math.hypot(next.x-from.x,next.y-from.y);
+      if(length>=ahead){const t=ahead/(length||1);
+        target={x:from.x+(next.x-from.x)*t,y:from.y+(next.y-from.y)*t};break;
+      }
+      ahead-=length;from=next;
+    }
+    const bearing=Math.atan2(target.y-b.y,target.x-b.x);
+    const error=this.normalizeAngle(bearing-b.heading);
+    return {rudder:Math.max(-1,Math.min(1,error*2.2)),target,deviation:bestDist};
   }
 
   guidanceSpeed() {

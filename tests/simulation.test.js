@@ -411,3 +411,18 @@ test('geometric path includes dock staging waypoint before gate',()=>{
  const k=r.path.findIndex(q=>q.x===p.x&&q.y===p.y);
  assert.ok(k>0);assert.ok(r.path.slice(k+1).some(q=>q.x===s.entryX&&q.y===s.gateY));
 });
+
+test('normal AI follows shared route without red zones',()=>{
+ const s=fresh();s.clearWaypoints();s.clearAvoidZones();s.boat.x=150;s.boat.y=500;
+ s.entryX=900;s.gateY=500;s.islandX=970;s.islandY=100;s.islandH=200;
+ const g=s.getAvoidanceGuidance(0.05);
+ assert.ok(g);assert.ok(s.routeGuidance.path.length>1);
+ assert.ok(Number.isFinite(g.deviation));
+});
+test('shared route includes dock preparation waypoint',()=>{
+ const s=fresh();s.clearWaypoints();s.clearAvoidZones();s.boat.x=150;s.boat.y=500;
+ s.entryX=900;s.gateY=500;s.islandX=970;s.islandY=100;s.islandH=200;
+ s.getAvoidanceGuidance(0.05);
+ const p=s.getDockPreparationPoint();
+ assert.ok(s.routeGuidance.path.some(q=>q.x===p.x&&q.y===p.y));
+});

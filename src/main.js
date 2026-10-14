@@ -192,6 +192,11 @@ function routeDistance(path, position) {
   return min;
 }
 function getPlannedRoute() {
+  // The normal AI controller and yellow visualization share the same route.
+  if (simulation.aiEnabled && !simulation.trainingActive && simulation.routeGuidance?.path.length > 1) {
+    routeStatus = 'Маршрут управления лодкой';
+    return simulation.routeGuidance.path.slice(Math.max(0,simulation.routeGuidance.index));
+  }
   // Replan on map/target changes, not on every animation frame.
   const key = JSON.stringify({
     waypointIndex: simulation.currentWaypointIndex,

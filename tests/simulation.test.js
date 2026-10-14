@@ -169,7 +169,9 @@ test('heading planner respects turn rate and avoids hazards',()=>{
  const s=fresh();s.clearWaypoints();s.clearAvoidZones();s.boat.x=150;s.boat.y=500;s.boat.heading=0;
  s.entryX=390;s.gateY=500;s.islandX=450;s.islandY=50;s.islandH=300;s.islandW=150;
  const result=planHeadingRoute(s,{maxNodes:4000});assert.equal(result.reachable,true);
- assert.ok(result.path.length>3);
+ assert.ok(result.path.length>=2);
+ assert.deepEqual(result.path[0],{x:150,y:500,heading:0});
+ assert.ok(Math.hypot(result.path.at(-1).x-390,result.path.at(-1).y-500)<15);
  for(const p of result.path)assert.ok(Math.hypot(p.x-150,p.y-500)>=0);
 });
 test('heading planner rejects obstructed starting point',()=>{
@@ -196,4 +198,15 @@ test('heading planner ignores already passed waypoint',()=>{
  const r=planHeadingRoute(s,{maxNodes:4000});
  assert.equal(r.reachable,true);
  assert.ok(r.path.every(p=>p.x>100));
+});
+
+test('heading planner produces a route without excessive zigzag in open water',()=>{
+ const s=fresh();s.clearWaypoints();s.clearAvoidZones();
+ s.boat.x=150;s.boat.y=500;s.boat.heading=0;
+ s.entryX=420;s.gateY=500;s.islandX=480;s.islandY=100;s.islandH=200;s.islandW=120;
+ const r=planHeadingRoute(s,{maxNodes:4000});
+ assert.equal(r.reachable,true);
+ let deviation=0;
+ for(const p of r.path) deviation=Math.max(deviation,Math.abs(p.y-500));
+ assert.ok(deviation<35,`unnecessary steering: ${deviation}`);
 });

@@ -173,21 +173,45 @@ function updateHUD() {
 
 let lastRouteKey = '';
 let plannedRoute = [];
+let lastPlanTime = -Infinity;
+function routeDistance(path, position) {
+  if (!path.length) return Infinity;
+  let min = Infinity;
+  for (let i=1;i<path.length;i++) {
+    const a=path[i-1],b=path[i],dx=b.x-a.x,dy=b.y-a.y;
+    const t=Math.max(0,Math.min(1,((position.x-a.x)*dx+(position.y-a.y)*dy)/(dx*dx+dy*dy||1)));
+    min=Math.min(min,Math.hypot(position.x-a.x-t*dx,position.y-a.y-t*dy));
+  }
+  return min;
+}
 function getPlannedRoute() {
+  // Replan on map/target changes, not on every animation frame.
   const key = JSON.stringify({
-    start: [simulation.boat.x, simulation.boat.y, simulation.boat.heading],
     waypointIndex: simulation.currentWaypointIndex,
-    targets: simulation.waypoints.slice(simulation.currentWaypointIndex).map(p => [p.x,p.y]),
-    zones: simulation.avoidZones.map(z => [z.x,z.y,z.radius]),
-    dock: [simulation.entryX,simulation.gateY,simulation.islandX,simulation.islandY]
+    targets: simulation.waypoints.slice(simulation.currentWaypointIndex).map(p=>[p.x,p.y]),
+    zones: simulation.avoidZones.map(z=>[z.x,z.y,z.radius]),
+    dock: [simulation.entryX,simulation.gateY,simulation.islandX,simulation.islandY,simulation.islandW,simulation.islandH],
+    reset: simulation.boat.trail.length === 0 ? [simulation.boat.x,simulation.boat.y] : null
   });
-  if(key !== lastRouteKey){
+  const changed = key !== lastRouteKey;
+  const offRoute = plannedRoute.length > 1 && routeDistance(plannedRoute,simulation.boat) > 65;
+  if (changed || (offRoute && simulation.time - lastPlanTime >= 5)) {
     lastRouteKey=key;
+    lastPlanTime=simulation.time;
     const connectivity=simulation.getRouteReachability();
     const result=connectivity.reachable ? planHeadingRoute(simulation) : connectivity;
-    plannedRoute=result.reachable ? result.path : [];
+    // Preserve the previous plan on a transient failed recalculation if the map did not change.
+    if(result.reachable) plannedRoute=result.path;
+    else if(changed) plannedRoute=[];
   }
-  return plannedRoute;
+  // Hide only the already travelled prefix; keep the planned geometry stable.
+  if(plannedRoute.length<2)return [];
+  let nearest=0, distance=Infinity;
+  for(let i=0;i<plannedRoute.length;i++) {
+    const d=Math.hypot(plannedRoute[i].x-simulation.boat.x,plannedRoute[i].y-simulation.boat.y);
+    if(d<distance){distance=d;nearest=i;}
+  }
+  return plannedRoute.slice(Math.max(0,nearest-1));
 }
 
 function render() {

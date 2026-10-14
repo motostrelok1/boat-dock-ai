@@ -27,7 +27,22 @@ export function planHeadingRoute(sim, options = {}) {
     const target=targets[segment];
     if(!free(start.x,start.y)||!free(target.x,target.y))
       return {reachable:false,path:[],reason:'Маршрут перекрыт препятствием',explored};
-    const open=[{...start,g:0,f:heuristic(start,target),parent:null,trail:[]}];
+    // For an aligned, obstacle-free segment, a straight course needs no steering.
+    const directAngle=Math.atan2(target.y-start.y,target.x-start.x);
+    if(Math.abs(normalize(directAngle-start.heading)) < 0.02) {
+      const distance=heuristic(start,target);
+      let clear=true;
+      for(let d=0;d<=distance;d+=3) {
+        const t=distance?Math.min(1,d/distance):1;
+        if(!free(start.x+(target.x-start.x)*t,start.y+(target.y-start.y)*t)){clear=false;break;}
+      }
+      if(clear && free(target.x,target.y)) {
+        full.push({x:target.x,y:target.y});
+        start={x:target.x,y:target.y,heading:start.heading};
+        continue;
+      }
+    }
+    const open=[{...start,g:0,f:heuristic(start,target),parent:null,trail:[],rudder:0}];
     const best=new Map();
     let goal=null, iterations=0;
     while(open.length && iterations++<maxNodes){
@@ -51,8 +66,8 @@ export function planHeadingRoute(sim, options = {}) {
           trail.push({x,y});
         }
         if(!valid)continue;
-        const next={x,y,heading:h,g:node.g+speed*stepTime+Math.abs(rudder)*0.15,
-          parent:node,trail};
+        const next={x,y,heading:h,g:node.g+speed*stepTime+Math.abs(rudder)*0.8 + Math.abs(rudder-node.rudder)*2,
+          parent:node,trail,rudder};
         const nk=key(next);
         if(best.has(nk)&&best.get(nk)<=next.g)continue;
         best.set(nk,next.g);

@@ -1,3 +1,4 @@
+import { planHeadingRoute } from './headingPlanner.js';
 import { Renderer } from './renderer.js';
 import { Simulation } from './simulation.js';
 
@@ -174,14 +175,15 @@ let lastRouteKey = '';
 let plannedRoute = [];
 function getPlannedRoute() {
   const key = JSON.stringify({
-    start: [simulation.boat.trail[0]?.x ?? simulation.boat.x, simulation.boat.trail[0]?.y ?? simulation.boat.y],
+    start: [simulation.boat.trail[0]?.x ?? simulation.boat.x, simulation.boat.trail[0]?.y ?? simulation.boat.y, simulation.boat.heading],
     targets: simulation.waypoints.map(p => [p.x,p.y]),
     zones: simulation.avoidZones.map(z => [z.x,z.y,z.radius]),
     dock: [simulation.entryX,simulation.gateY,simulation.islandX,simulation.islandY]
   });
   if(key !== lastRouteKey){
     lastRouteKey=key;
-    const result=simulation.getRouteReachability();
+    const connectivity=simulation.getRouteReachability();
+    const result=connectivity.reachable ? planHeadingRoute(simulation) : connectivity;
     plannedRoute=result.reachable ? result.path : [];
   }
   return plannedRoute;

@@ -54,7 +54,7 @@ export class Simulation {
     // === Stage 2.1: Waypoints (обязательные точки маршрута) ===
     this.waypoints = []; // [{x, y, passed}]
     this.currentWaypointIndex = 0;
-    this.waypointRadius = 3;
+    this.waypointRadius = 18;
     this.waypointBonus = 1000;
     
     // === Stage 2.1: Avoid zones (точки обхода) ===

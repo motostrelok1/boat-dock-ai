@@ -339,7 +339,7 @@ test('dock alignment targets a staging point when approaching from above',()=>{
  s.entryX=900;s.gateY=500;s.boat.x=790;s.boat.y=390;s.boat.heading=1;
  const g=s.getDockAlignmentGuidance();
  assert.ok(g);assert.equal(g.aligned,false);
- assert.equal(g.target.x,795);assert.equal(g.target.y,500);
+ assert.equal(g.target.x,745);assert.equal(g.target.y,500);
 });
 test('dock alignment targets a staging point when approaching from below',()=>{
  const s=fresh();s.clearWaypoints();s.clearAvoidZones();
@@ -352,11 +352,25 @@ test('once aligned, dock approach aims through gate, not at entry dot',()=>{
  const s=fresh();s.clearWaypoints();s.clearAvoidZones();
  s.entryX=900;s.gateY=500;s.boat.x=795;s.boat.y=500;s.boat.heading=0.05;
  const g=s.getDockAlignmentGuidance();
- assert.ok(g.aligned);assert.equal(g.target.x,975);
+ assert.ok(g.aligned);assert.equal(g.target.x,900+s.islandW+95);
 });
 test('dock alignment declines unsafe straight chord through avoid zone',()=>{
  const s=fresh();s.clearWaypoints();s.clearAvoidZones();
  s.entryX=900;s.gateY=500;s.boat.x=700;s.boat.y=500;s.boat.heading=0;
  s.avoidZones=[{x:750,y:500,radius:20}];
  assert.equal(s.getDockAlignmentGuidance(),null);
+});
+
+test('dock approach recovers to open water when staging point was missed',()=>{
+ const s=fresh();s.clearWaypoints();s.clearAvoidZones();
+ s.entryX=900;s.gateY=500;s.boat.x=850;s.boat.y=525;s.boat.heading=0.8;
+ const g=s.getDockAlignmentGuidance();
+ assert.ok(g);assert.equal(g.aligned,false);
+ assert.ok(g.target.x<s.boat.x-100);
+});
+test('dock approach refuses premature alignment with incorrect heading',()=>{
+ const s=fresh();s.clearWaypoints();s.clearAvoidZones();
+ s.entryX=900;s.gateY=500;s.boat.x=745;s.boat.y=500;s.boat.heading=0.35;
+ const g=s.getDockAlignmentGuidance();
+ assert.equal(g.aligned,false);
 });

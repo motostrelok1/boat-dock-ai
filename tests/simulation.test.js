@@ -1,6 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { Simulation } from '../src/simulation.js';
+import { buildTurnArcRoute } from '../src/arcPlanner.js';
 import { minimumTurnRadius, validateTurnRadius } from '../src/turnRadius.js';
 import { smoothSafeRoute } from '../src/routeSmoothing.js';
 import { planHeadingRoute } from '../src/headingPlanner.js';
@@ -264,4 +265,17 @@ test('turn validation accepts sampled gentle circular arc',()=>{
  const boat=fresh().boat;
  const arc=Array.from({length:15},(_,i)=>({x:80*Math.cos(i*0.08),y:80*Math.sin(i*0.08)}));
  assert.equal(validateTurnRadius(arc,boat,30).valid,true);
+});
+
+test('30px/s right-angle bend produces permissible circular arc',()=>{
+ const s=fresh();s.clearWaypoints();s.clearAvoidZones();s.islandX=1600;s.islandY=100;s.islandW=100;s.islandH=200;
+ const r=buildTurnArcRoute(s,[{x:100,y:200},{x:250,y:200},{x:250,y:350}],30);
+ assert.equal(r.valid,true,r.reason);
+ assert.ok(r.path.length>8);
+});
+test('not enough tangent length is reported rather than faking a valid turn',()=>{
+ const s=fresh();s.clearWaypoints();s.clearAvoidZones();
+ const r=buildTurnArcRoute(s,[{x:100,y:200},{x:104,y:200},{x:104,y:240}],30);
+ assert.equal(r.valid,false);
+ assert.match(r.reason,/Не хватает места/);
 });

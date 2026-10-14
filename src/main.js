@@ -212,7 +212,7 @@ function getPlannedRoute() {
         routeStatus = 'Маршрут с учётом поворотов';
       } else {
         plannedRoute = connectivity.path;
-        routeStatus = 'Кратчайший проверенный обход — повороты не проверены';
+        routeStatus = 'Упрощённый безопасный обход — повороты не проверены';
       }
     }
   }

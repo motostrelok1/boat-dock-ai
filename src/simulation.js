@@ -74,6 +74,10 @@ export class Simulation {
   }
   
   randomizeLayout(rng = Math.random) {
+    this.holding = null;
+    this.boat.speed = 30;
+    this.notice = '';
+    if (this.randomAvoidEnabled) this.avoidZones = [];
     this.islandW = 120 + rng() * 80;
     this.islandH = 180 + rng() * 120;
     this.islandX = this.width - this.islandW + 20;
@@ -196,7 +200,7 @@ export class Simulation {
   // === Waypoints ===
   addWaypoint(x, y) {
     this.waypoints.push({ x, y, passed: false });
-    this.checkLayoutSafety();
+    if (!this.randomWaypointEnabled) this.checkLayoutSafety();
   }
   
   removeWaypointAt(x, y) {
@@ -257,7 +261,6 @@ export class Simulation {
     this.avoidZones = [];
     const radius = this.randomAvoidRadius;
     const count = this.randomAvoidCount;
-    const clearance = radius + this.boat.width + 10;
     for (let i = 0; i < count; i++) {
       let placed = false;
       for (let attempt = 0; attempt < 200 && !placed; attempt++) {
@@ -535,6 +538,7 @@ export class Simulation {
     }
     this.time = 0;
     this.holding = null;
+    this.notice = '';
     this.boat.speed = 30;
     this.finished = false;
     this.running = true;

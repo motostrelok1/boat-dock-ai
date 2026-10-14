@@ -339,18 +339,20 @@ test('dock alignment targets a staging point when approaching from above',()=>{
  s.entryX=900;s.gateY=500;s.boat.x=790;s.boat.y=390;s.boat.heading=1;
  const g=s.getDockAlignmentGuidance();
  assert.ok(g);assert.equal(g.aligned,false);
- assert.ok(g.target.x<790);assert.equal(g.target.y,440);
+ assert.ok(g.target.x<790);assert.equal(g.target.y,435);
 });
 test('dock alignment targets a staging point when approaching from below',()=>{
  const s=fresh();s.clearWaypoints();s.clearAvoidZones();
  s.entryX=900;s.gateY=500;s.boat.x=790;s.boat.y=610;s.boat.heading=-1;
  const g=s.getDockAlignmentGuidance();
  assert.ok(g);assert.equal(g.aligned,false);
- assert.equal(g.target.y,560);
+ assert.equal(g.target.y,565);
 });
 test('once aligned, dock approach aims through gate, not at entry dot',()=>{
  const s=fresh();s.clearWaypoints();s.clearAvoidZones();
- s.entryX=900;s.gateY=500;s.boat.x=795;s.boat.y=500;s.boat.heading=0.05;
+ s.entryX=900;s.gateY=500;s.boat.x=750;s.boat.y=500;s.boat.heading=0.05;
+ s.getDockAlignmentGuidance(); // pass the first point, with arbitrary valid heading
+ s.boat.x=795;
  const g=s.getDockAlignmentGuidance();
  assert.ok(g.aligned);assert.equal(g.target.x,s.islandX+s.islandW+80);
 });

@@ -157,6 +157,58 @@ export class Simulation {
     return null;
   }
 
+  // Conservative 2-D grid flood-fill; verifies geometric connectivity, not dynamic steering feasibility.
+  getRouteReachability(step = 12) {
+    const hull = this.boat.length / 2 + this.safetyMargin;
+    const cols = Math.floor(this.width / step) + 1;
+    const rows = Math.floor(this.height / step) + 1;
+    const free = (x,y) => {
+      if (x < hull || y < hull || x > this.width-hull || y > this.height-hull) return false;
+      if(this.avoidZones.some(z => this.zoneClearance(z,x,y,this.boat.length/2) <= 0)) return false;
+      // The dock is behind the island. This check is only for the approach to its entry line.
+      const blockedIsland = x >= this.islandX-hull && x <= this.islandX+this.islandW+hull &&
+        y >= this.islandY-hull && y <= this.islandY+this.islandH+hull &&
+        Math.abs(y-this.gateY) >= this.gateWidth/2-hull;
+      return !blockedIsland;
+    };
+    const index=(x,y)=>Math.max(0,Math.min(cols-1,Math.round(x/step)))+
+      cols*Math.max(0,Math.min(rows-1,Math.round(y/step)));
+    const centers=i=>({x:(i%cols)*step,y:Math.floor(i/cols)*step});
+    const targets=[...this.waypoints,{x:this.entryX,y:this.gateY}];
+    let start={x:this.boat.x,y:this.boat.y};
+    for(let targetIndex=0;targetIndex<targets.length;targetIndex++){
+      const target=targets[targetIndex];
+      if(!free(start.x,start.y)||!free(target.x,target.y))
+        return {reachable:false,reason:`Точка ${targetIndex+1} находится в запретной области`};
+      const source=index(start.x,start.y), goal=index(target.x,target.y);
+      const seen=new Uint8Array(cols*rows), queue=new Int32Array(cols*rows);
+      let head=0,tail=0;queue[tail++]=source;seen[source]=1;
+      const directions=[[1,0],[-1,0],[0,1],[0,-1],[1,1],[-1,-1],[1,-1],[-1,1]];
+      const validSegment=(a,b)=>{
+        for(let j=1;j<=4;j++){
+          const t=j/4;
+          if(!free(a.x+(b.x-a.x)*t,a.y+(b.y-a.y)*t))return false;
+        }
+        return true;
+      };
+      while(head<tail&&!seen[goal]){
+        const current=queue[head++],p=centers(current);
+        for(const [dx,dy] of directions){
+          const cx=current%cols+dx,cy=Math.floor(current/cols)+dy;
+          if(cx<0||cy<0||cx>=cols||cy>=rows)continue;
+          const next=cy*cols+cx;
+          if(seen[next])continue;
+          const point=centers(next);
+          if(!free(point.x,point.y)||!validSegment(p,point))continue;
+          seen[next]=1;queue[tail++]=next;
+        }
+      }
+      if(!seen[goal]) return {reachable:false,reason:`Нет прохода к ${targetIndex<targets.length-1?'маршрутной точке '+(targetIndex+1):'входу в док'}`};
+      start=target;
+    }
+    return {reachable:true,reason:null};
+  }
+
   // A holding circle is only allowed when its entire swept path stays safe.
   findSafeHoldingTurn() {
     const speed=10, dt=0.05, steps=200;
@@ -181,7 +233,7 @@ export class Simulation {
 
   checkLayoutSafety() {
     if(this.holding) return;
-    const conflict=this.getLayoutConflict();
+    const conflict=this.getLayoutConflict() || (this.avoidZones.length ? this.getRouteReachability().reason : null);
     if(!conflict) return;
     // During batch training, report invalid layouts without running wall-clock waits.
     if(this.trainingActive) { this.notice=conflict;return; }

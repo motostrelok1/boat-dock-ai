@@ -110,3 +110,18 @@ test('no safe holding loop removes zones without sending boat through danger',()
   assert.equal(s.avoidZones.length,0);
   assert.match(s.notice,/нет места для ожидания/);
 });
+
+test('waypoint is accepted within wider 18 px arrival radius',()=>{
+  const s=fresh();
+  assert.equal(s.waypointRadius,18);
+  s.addWaypoint(200,200);
+  s.boat.x=217;s.boat.y=200;
+  s.checkWaypoints();
+  assert.equal(s.currentWaypointIndex,1);
+});
+test('crossing edge of the enlarged waypoint circle counts',()=>{
+  const s=fresh();s.addWaypoint(200,200);
+  s.boat.x=230;s.boat.y=217;
+  s.checkWaypoints({x:170,y:217});
+  assert.equal(s.currentWaypointIndex,1);
+});

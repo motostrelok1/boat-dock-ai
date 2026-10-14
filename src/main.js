@@ -245,6 +245,7 @@ function render() {
     simulation.gateY, simulation.gateWidth, simulation.entryX
   );
   renderer.drawWaypoints(simulation.waypoints, simulation.currentWaypointIndex);
+  renderer.drawDockPreparation(simulation.getDockPreparationPoint(), simulation.dockPreparationPassed);
   renderer.drawAvoidZones(simulation.avoidZones);
   renderer.drawPlannedRoute(getPlannedRoute());
   if (routeStatus) {

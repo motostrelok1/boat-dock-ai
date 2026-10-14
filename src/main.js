@@ -1,3 +1,4 @@
+import { replayTrajectory } from './trajectoryReplay.js';
 import { buildTurnArcRoute } from './arcPlanner.js';
 import { validateTurnRadius, minimumTurnRadius } from './turnRadius.js';
 import { smoothSafeRoute } from './routeSmoothing.js';
@@ -213,11 +214,13 @@ function getPlannedRoute() {
       if (result.reachable) {
         plannedRoute = result.path;
         const validation = validateTurnRadius(result.path, simulation.boat, 20);
-        routeStatus = validation.valid ? 'Маршрут проверен на радиус поворота при 20 px/с' : 'Маршрут: требуется проверка поворотов';
+        const playback = validation.valid ? replayTrajectory(simulation, result.path, {speed:30}) : {valid:false,reason:validation.reason};
+        routeStatus = playback.valid ? 'Проверено виртуальным проходом при 30 px/с' : `Предварительный маршрут — ${playback.reason}`;
       } else {
         const arc = buildTurnArcRoute(simulation, connectivity.path, 30);
         plannedRoute = arc.valid ? arc.path : smoothSafeRoute(simulation, connectivity.path);
-        routeStatus = arc.valid ? 'Дуги проверены при 30 px/с; начальный курс ещё не проверен' : `Предварительный маршрут — ${arc.reason}`;
+        const playback = arc.valid ? replayTrajectory(simulation, arc.path, {speed:30}) : {valid:false,reason:arc.reason};
+        routeStatus = playback.valid ? 'Проверено виртуальным проходом при 30 px/с' : `Предварительный маршрут — ${playback.reason}`;
       }
     }
   }

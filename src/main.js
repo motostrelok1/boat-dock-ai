@@ -1,3 +1,4 @@
+import { buildTurnArcRoute } from './arcPlanner.js';
 import { validateTurnRadius, minimumTurnRadius } from './turnRadius.js';
 import { smoothSafeRoute } from './routeSmoothing.js';
 import { planHeadingRoute } from './headingPlanner.js';
@@ -214,9 +215,9 @@ function getPlannedRoute() {
         const validation = validateTurnRadius(result.path, simulation.boat, 20);
         routeStatus = validation.valid ? 'Маршрут проверен на радиус поворота при 20 px/с' : 'Маршрут: требуется проверка поворотов';
       } else {
-        plannedRoute = smoothSafeRoute(simulation, connectivity.path);
-        const check = validateTurnRadius(plannedRoute, simulation.boat, 10);
-        routeStatus = check.valid ? 'Геометрический путь: радиус проверен при 10 px/с, курс не проверен' : `Предварительный путь — ${check.reason}; минимум ${minimumTurnRadius(simulation.boat,10).toFixed(1)} px`;
+        const arc = buildTurnArcRoute(simulation, connectivity.path, 30);
+        plannedRoute = arc.valid ? arc.path : smoothSafeRoute(simulation, connectivity.path);
+        routeStatus = arc.valid ? 'Дуги проверены при 30 px/с; начальный курс ещё не проверен' : `Предварительный маршрут — ${arc.reason}`;
       }
     }
   }

@@ -70,6 +70,11 @@ export class Simulation {
     this.notice = '';
     this.routeGuidance = null;
     this.routeGuidanceAge = 0;
+    this.routeDeviation = 0;
+    this.routeRecoveryCount = 0;
+    this.circlingDetected = false;
+    this.routeHeadingAccum = 0;
+    this.routeLastHeading = null;
     this.dockApproachAligned = false;
     this.dockPreparationPassed = false;
     
@@ -81,6 +86,10 @@ export class Simulation {
     this.holding = null;
     this.routeGuidance = null;
     this.routeGuidanceAge = 0;
+    this.routeDeviation = 0;
+    this.circlingDetected = false;
+    this.routeHeadingAccum = 0;
+    this.routeLastHeading = null;
     this.boat.speed = 30;
     this.boat.setTargetSpeed(30);
     this.notice = '';
@@ -526,9 +535,38 @@ export class Simulation {
     this.boat.setTargetSpeed(this.getDockTargetSpeed());
     const previousPosition = {x:this.boat.x, y:this.boat.y};
     this.boat.update(dt, rudder);
+    this.updateRouteDiagnostics(dt);
     this.checkWaypoints(previousPosition);
   }
   
+  updateRouteDiagnostics(dt) {
+    if(!this.aiEnabled || this.trainingActive || !this.routeGuidance?.path?.length)return;
+    const heading=this.boat.heading;
+    if(this.routeLastHeading!==null) {
+      this.routeHeadingAccum+=Math.abs(this.normalizeAngle(heading-this.routeLastHeading));
+      this.routeHeadingAccum=Math.max(0,this.routeHeadingAccum-dt*0.22);
+    }
+    this.routeLastHeading=heading;
+    if(this.routeHeadingAccum>Math.PI*2.2)this.circlingDetected=true;
+    const path=this.routeGuidance.path;
+    let distance=Infinity;
+    for(let i=0;i<path.length-1;i++) {
+      const a=path[i],b=path[i+1],dx=b.x-a.x,dy=b.y-a.y;
+      const t=Math.max(0,Math.min(1,((this.boat.x-a.x)*dx+(this.boat.y-a.y)*dy)/(dx*dx+dy*dy||1)));
+      distance=Math.min(distance,Math.hypot(this.boat.x-a.x-t*dx,this.boat.y-a.y-t*dy));
+    }
+    this.routeDeviation=Number.isFinite(distance)?distance:0;
+    // Invalidate the cached route rather than skipping or crediting any waypoint.
+    if((this.routeDeviation>65 || this.circlingDetected) && this.routeGuidanceAge>=2) {
+      this.routeGuidance=null;
+      this.routeGuidanceAge=0;
+      this.routeRecoveryCount++;
+      this.routeHeadingAccum=0;
+      this.circlingDetected=false;
+      this.routeLastHeading=null;
+    }
+  }
+
   getDockPreparationPoint() {
     // Three 50px grid cells before the existing green gate entry point.
     return {x:this.entryX-150,y:this.gateY};
@@ -773,6 +811,10 @@ export class Simulation {
       this.randomizeLayout();
     }
     this.time = 0;
+    this.routeDeviation = 0;
+    this.circlingDetected = false;
+    this.routeHeadingAccum = 0;
+    this.routeLastHeading = null;
     this.dockApproachAligned = false;
     this.dockPreparationPassed = false;
     this.routeGuidance = null;

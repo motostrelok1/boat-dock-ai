@@ -125,3 +125,27 @@ test('crossing edge of the enlarged waypoint circle counts',()=>{
   s.checkWaypoints({x:170,y:217});
   assert.equal(s.currentWaypointIndex,1);
 });
+
+test('route connectivity works for a clear approach',()=>{
+ const s=fresh();s.clearWaypoints();s.clearAvoidZones();
+ s.boat.x=100;s.boat.y=500;
+ s.addWaypoint(500,500);
+ assert.equal(s.getRouteReachability().reachable,true);
+});
+test('route connectivity detects a fully blocked barrier',()=>{
+ const s=fresh();s.clearWaypoints();s.clearAvoidZones();
+ s.boat.x=100;s.boat.y=500;
+ s.addWaypoint(900,500);
+ s.avoidZones=[];
+ for(let y=0;y<=1000;y+=65) s.avoidZones.push({x:600,y,radius:55});
+ const result=s.getRouteReachability();
+ assert.equal(result.reachable,false);
+ assert.match(result.reason,/Нет прохода/);
+});
+test('route precheck notices a waypoint inside a hazard',()=>{
+ const s=fresh();s.clearWaypoints();s.clearAvoidZones();
+ s.boat.x=100;s.boat.y=500;
+ s.waypoints=[{x:500,y:500,passed:false}];
+ s.avoidZones=[{x:500,y:500,radius:30}];
+ assert.equal(s.getRouteReachability().reachable,false);
+});

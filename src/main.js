@@ -204,7 +204,7 @@ function getPlannedRoute() {
       plannedRoute = [];
       routeStatus = 'Маршрут заблокирован';
     } else {
-      const result = planHeadingRoute(simulation);
+      const result = planHeadingRoute(simulation, {maxNodes: 6000});
       // The heading-aware search is bounded and can fail on multi-point routes.
       // Fall back only to the verified collision-free geometric route, never to a straight chord.
       if (result.reachable) {
@@ -212,7 +212,7 @@ function getPlannedRoute() {
         routeStatus = 'Маршрут с учётом поворотов';
       } else {
         plannedRoute = connectivity.path;
-        routeStatus = 'Предварительный маршрут — повороты не проверены';
+        routeStatus = 'Кратчайший проверенный обход — повороты не проверены';
       }
     }
   }

@@ -149,3 +149,17 @@ test('route precheck notices a waypoint inside a hazard',()=>{
  s.avoidZones=[{x:500,y:500,radius:30}];
  assert.equal(s.getRouteReachability().reachable,false);
 });
+
+test('reachable route exposes ordered positions from boat to waypoints and dock',()=>{
+ const s=fresh();s.clearWaypoints();s.clearAvoidZones();s.boat.x=100;s.boat.y=500;
+ s.addWaypoint(500,500);const r=s.getRouteReachability();
+ assert.equal(r.reachable,true);assert.ok(r.path.length>2);
+ assert.deepEqual(r.path[0],{x:100,y:500});
+ assert.deepEqual(r.path.at(-1),{x:s.entryX,y:s.gateY});
+ assert.ok(r.path.some(p=>p.x===500&&p.y===500));
+});
+test('blocked route returns empty visualization path',()=>{
+ const s=fresh();s.clearWaypoints();s.clearAvoidZones();s.boat.x=100;s.boat.y=500;
+ s.avoidZones=[{x:100,y:500,radius:30}];
+ const r=s.getRouteReachability();assert.equal(r.reachable,false);assert.deepEqual(r.path,[]);
+});

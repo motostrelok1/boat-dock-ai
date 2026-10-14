@@ -15,6 +15,10 @@ const hudTargetSpeed = document.getElementById('hud-target-speed');
 const hudHeading = document.getElementById('hud-heading');
 const hudRudder = document.getElementById('hud-rudder');
 const hudScore = document.getElementById('hud-score');
+const hudRouteDeviation = document.getElementById('hud-route-deviation');
+const hudRouteReplans = document.getElementById('hud-route-replans');
+const hudRouteTarget = document.getElementById('hud-route-target');
+const hudRouteStatus = document.getElementById('hud-route-status');
 const hudInputDist = document.getElementById('hud-input-dist');
 const hudInputAngle = document.getElementById('hud-input-angle');
 const hudInputSin = document.getElementById('hud-input-sin');
@@ -155,6 +159,17 @@ function updateHUD() {
   hudHeading.textContent = (state.heading * 180 / Math.PI).toFixed(1);
   hudRudder.textContent = (state.rudderAngle * 45).toFixed(1);
   hudScore.textContent = simulation.score.toFixed(1);
+  hudRouteDeviation.textContent = simulation.routeGuidance?.path?.length > 1
+    ? simulation.routeDeviation.toFixed(1) + ' px' : '—';
+  hudRouteDeviation.style.color = simulation.routeDeviation > 65 ? '#ffbf47' : '';
+  hudRouteReplans.textContent = String(simulation.routeRecoveryCount);
+  hudRouteTarget.textContent = simulation.currentWaypointIndex < simulation.waypoints.length
+    ? 'Точка ' + (simulation.currentWaypointIndex + 1) + ' из ' + simulation.waypoints.length
+    : !simulation.dockPreparationPassed ? 'ВЫРАВНИВАНИЕ'
+    : simulation.entrySuccess ? 'Внутри дока' : 'ВХОД В ДОК';
+  hudRouteStatus.textContent = simulation.circlingDetected ? '⚠ Циркуляция'
+    : simulation.routeDeviation > 65 ? '⚠ Отклонение' : 'Следование маршруту';
+  hudRouteStatus.style.color = simulation.circlingDetected || simulation.routeDeviation > 65 ? '#ffbf47' : '';
 
   const inputs = simulation.getInputs();
   const output = simulation.aiEnabled ? simulation.nn.forward(inputs) : [simulation.boat.rudderAngle];
@@ -261,12 +276,6 @@ function render() {
     renderer.ctx.fillText(routeStatus, 20, 190);
     renderer.ctx.restore();
   }
-  renderer.ctx.save();
-  renderer.ctx.font='bold 13px sans-serif';
-  renderer.ctx.fillStyle=simulation.routeDeviation>65?'#ffbf47':'#80deea';
-  renderer.ctx.fillText(`Отклонение: ${simulation.routeDeviation.toFixed(1)} px | Перепланирований: ${simulation.routeRecoveryCount}`,20,210);
-  if(simulation.circlingDetected)renderer.ctx.fillText('⚠️ Обнаружена циркуляция',20,230);
-  renderer.ctx.restore();
   renderer.drawTrail(simulation.boat.trail);
   renderer.drawBoat(simulation.boat);
   renderer.drawPrediction(simulation.boat, simulation.boat.getPrediction(3));

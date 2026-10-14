@@ -385,3 +385,18 @@ test('aligned dock controller keeps the heading correction within gate approach 
  assert.equal(g.target.y,s.gateY);
  assert.ok(Math.abs(g.rudder)<=1);
 });
+
+test('dock preparation point is three grid cells from gate and any heading counts',()=>{
+ const s=fresh();s.clearWaypoints();s.clearAvoidZones();s.entryX=900;s.gateY=500;
+ assert.deepEqual(s.getDockPreparationPoint(),{x:750,y:500});
+ s.boat.x=750;s.boat.y=500;s.boat.heading=Math.PI/2;
+ const g=s.getDockAlignmentGuidance();assert.ok(g);assert.equal(s.dockPreparationPassed,true);
+ assert.equal(g.aligned,false);
+});
+test('alignment between dock points follows axis and admits heading near +X',()=>{
+ const s=fresh();s.clearWaypoints();s.clearAvoidZones();s.entryX=900;s.gateY=500;
+ s.boat.x=750;s.boat.y=500;s.boat.heading=1;s.getDockAlignmentGuidance();
+ s.boat.x=790;s.boat.heading=0.08;
+ const g=s.getDockAlignmentGuidance();assert.equal(g.aligned,true);
+ assert.ok(g.target.x>900);
+});

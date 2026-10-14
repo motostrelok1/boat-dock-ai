@@ -521,10 +521,9 @@ export class Simulation {
     // Existing 6→8→1 networks keep controlling only the rudder.
     // A separate route-aware speed recommendation governs target speed until
     // a new two-output network is explicitly introduced.
-    const guided = this.aiEnabled && !this.trainingActive && this.routeGuidance?.path.length;
-    const dockGuidance = this.aiEnabled && !this.trainingActive && this.currentWaypointIndex>=this.waypoints.length
-      ? this.getDockAlignmentGuidance() : null;
-    this.boat.setTargetSpeed(dockGuidance ? (dockGuidance.aligned || this.entrySuccess ? 10 : 20) : guided ? this.guidanceSpeed() : this.recommendSpeed());
+    // Only decelerate for the final docking approach. Never slow for ordinary
+    // green waypoint corners or red-zone detours.
+    this.boat.setTargetSpeed(this.getDockTargetSpeed());
     const previousPosition = {x:this.boat.x, y:this.boat.y};
     this.boat.update(dt, rudder);
     this.checkWaypoints(previousPosition);
@@ -634,6 +633,17 @@ export class Simulation {
     const bearing=Math.atan2(target.y-b.y,target.x-b.x);
     const error=this.normalizeAngle(bearing-b.heading);
     return {rudder:Math.max(-1,Math.min(1,error*2.2)),target,deviation:bestDist};
+  }
+
+  getDockTargetSpeed() {
+    if (this.currentWaypointIndex < this.waypoints.length) return 30;
+    if (this.entrySuccess || this.dockPreparationPassed) return 10;
+    const preparation=this.getDockPreparationPoint();
+    const distance=Math.hypot(this.boat.x-preparation.x,this.boat.y-preparation.y);
+    // Begin braking far enough in advance for the 4 px/s² deceleration.
+    // At 30->20 px/s the theoretical distance is 62.5 px; allow more margin.
+    if (distance<=95) return 20;
+    return 30;
   }
 
   guidanceSpeed() {

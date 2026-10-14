@@ -197,3 +197,14 @@ test('heading planner ignores already passed waypoint',()=>{
  assert.equal(r.reachable,true);
  assert.ok(r.path.every(p=>p.x>100));
 });
+
+test('heading planner produces a route without excessive zigzag in open water',()=>{
+ const s=fresh();s.clearWaypoints();s.clearAvoidZones();
+ s.boat.x=150;s.boat.y=500;s.boat.heading=0;
+ s.entryX=420;s.gateY=500;s.islandX=480;s.islandY=100;s.islandH=200;s.islandW=120;
+ const r=planHeadingRoute(s,{maxNodes:4000});
+ assert.equal(r.reachable,true);
+ let deviation=0;
+ for(const p of r.path) deviation=Math.max(deviation,Math.abs(p.y-500));
+ assert.ok(deviation<35,`unnecessary steering: ${deviation}`);
+});

@@ -210,3 +210,23 @@ test('heading planner produces a route without excessive zigzag in open water',(
  for(const p of r.path) deviation=Math.max(deviation,Math.abs(p.y-500));
  assert.ok(deviation<35,`unnecessary steering: ${deviation}`);
 });
+
+test('geometric route takes a direct shortcut in clear water',()=>{
+ const s=fresh();s.clearWaypoints();s.clearAvoidZones();s.boat.x=150;s.boat.y=500;
+ s.entryX=420;s.gateY=500;s.islandX=480;s.islandY=100;s.islandH=200;s.islandW=120;
+ const r=s.getRouteReachability();assert.equal(r.reachable,true);
+ assert.ok(r.path.length<=3);
+});
+test('geometric shortcut does not cross an avoid zone',()=>{
+ const s=fresh();s.clearWaypoints();s.clearAvoidZones();s.boat.x=150;s.boat.y=500;
+ s.entryX=900;s.gateY=500;s.islandX=1100;s.islandY=100;s.islandH=200;s.islandW=120;
+ s.avoidZones=[{x:500,y:500,radius:70}];
+ const r=s.getRouteReachability();assert.equal(r.reachable,true);
+ for(let i=1;i<r.path.length;i++){
+  const a=r.path[i-1],b=r.path[i],steps=Math.ceil(Math.hypot(b.x-a.x,b.y-a.y)/3);
+  for(let j=0;j<=steps;j++){
+   const x=a.x+(b.x-a.x)*j/steps,y=a.y+(b.y-a.y)*j/steps;
+   assert.ok(s.zoneClearance(s.avoidZones[0],x,y,s.boat.length/2)>0);
+  }
+ }
+});

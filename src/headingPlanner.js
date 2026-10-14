@@ -6,6 +6,7 @@ export function planHeadingRoute(sim, options = {}) {
   const maxNodes = options.maxNodes ?? 12000;
   const margin = sim.boat.length / 2 + sim.safetyMargin;
   const targets = [...sim.waypoints.slice(sim.currentWaypointIndex).map(p=>({x:p.x,y:p.y,tolerance:sim.waypointRadius})),
+    ...(!sim.dockPreparationPassed ? [{...sim.getDockPreparationPoint(),tolerance:sim.waypointRadius}] : []),
     {x:sim.entryX,y:sim.gateY,tolerance:12}];
   const free = (x,y) => {
     if(x<margin || y<margin || x>sim.width-margin || y>sim.height-margin)return false;

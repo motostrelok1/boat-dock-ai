@@ -195,6 +195,7 @@ function getPlannedRoute() {
   // Replan on map/target changes, not on every animation frame.
   const key = JSON.stringify({
     waypointIndex: simulation.currentWaypointIndex,
+    preparationPassed: simulation.dockPreparationPassed,
     targets: simulation.waypoints.slice(simulation.currentWaypointIndex).map(p=>[p.x,p.y]),
     zones: simulation.avoidZones.map(z=>[z.x,z.y,z.radius]),
     dock: [simulation.entryX,simulation.gateY,simulation.islandX,simulation.islandY,simulation.islandW,simulation.islandH],

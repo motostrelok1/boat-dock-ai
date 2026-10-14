@@ -402,3 +402,12 @@ test('alignment between dock points follows axis and admits heading near +X',()=
  const g=s.getDockAlignmentGuidance();assert.equal(g.aligned,true);
  assert.ok(g.target.x>900);
 });
+
+test('geometric path includes dock staging waypoint before gate',()=>{
+ const s=fresh();s.clearWaypoints();s.clearAvoidZones();s.boat.x=150;s.boat.y=500;
+ s.entryX=900;s.gateY=500;s.islandX=960;s.islandY=100;s.islandH=200;s.islandW=120;
+ const p=s.getDockPreparationPoint(),r=s.getRouteReachability();
+ assert.equal(r.reachable,true);
+ const k=r.path.findIndex(q=>q.x===p.x&&q.y===p.y);
+ assert.ok(k>0);assert.ok(r.path.slice(k+1).some(q=>q.x===s.entryX&&q.y===s.gateY));
+});

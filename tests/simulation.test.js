@@ -1,6 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { Simulation } from '../src/simulation.js';
+import { replayTrajectory } from '../src/trajectoryReplay.js';
 import { buildTurnArcRoute } from '../src/arcPlanner.js';
 import { minimumTurnRadius, validateTurnRadius } from '../src/turnRadius.js';
 import { smoothSafeRoute } from '../src/routeSmoothing.js';
@@ -278,4 +279,17 @@ test('not enough tangent length is reported rather than faking a valid turn',()=
  const r=buildTurnArcRoute(s,[{x:100,y:200},{x:104,y:200},{x:104,y:240}],30);
  assert.equal(r.valid,false);
  assert.match(r.reason,/Не хватает места/);
+});
+
+test('virtual route replay reaches a straight unobstructed dock approach',()=>{
+ const s=fresh();s.clearWaypoints();s.clearAvoidZones();s.boat.x=150;s.boat.y=500;s.boat.heading=0;
+ s.entryX=390;s.gateY=500;s.islandX=450;s.islandY=100;s.islandH=200;s.islandW=120;
+ const r=replayTrajectory(s,[{x:150,y:500},{x:390,y:500}],{maxSeconds:20});
+ assert.equal(r.valid,true,r.reason);
+});
+test('virtual route replay rejects a boat starting in a hazard',()=>{
+ const s=fresh();s.boat.x=150;s.boat.y=500;s.avoidZones=[{x:150,y:500,radius:40}];
+ const r=replayTrajectory(s,[{x:150,y:500},{x:390,y:500}]);
+ assert.equal(r.valid,false);
+ assert.match(r.reason,/Старт/);
 });

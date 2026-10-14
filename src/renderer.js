@@ -140,7 +140,7 @@ export class Renderer {
         ctx.strokeStyle = '#00e676';
         ctx.lineWidth = 1.5;
         ctx.beginPath();
-        ctx.arc(wp.x, wp.y, 8, 0, Math.PI * 2);
+        ctx.arc(wp.x, wp.y, 18, 0, Math.PI * 2);
         ctx.stroke();
       }
       

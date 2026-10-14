@@ -426,3 +426,13 @@ test('shared route includes dock preparation waypoint',()=>{
  const p=s.getDockPreparationPoint();
  assert.ok(s.routeGuidance.path.some(q=>q.x===p.x&&q.y===p.y));
 });
+
+test('pure pursuit cannot skip the uncaptured mandatory waypoint',()=>{
+ const s=fresh();s.clearWaypoints();s.clearAvoidZones();
+ s.boat.x=240;s.boat.y=500;s.boat.heading=0;s.entryX=900;s.gateY=500;
+ s.islandX=960;s.islandY=100;s.islandH=200;
+ s.waypoints=[{x:300,y:500,passed:false}];s.currentWaypointIndex=0;
+ const g=s.getAvoidanceGuidance(.05);
+ assert.ok(g);assert.ok(g.target.x<=300+1);
+ assert.equal(s.currentWaypointIndex,0);
+});

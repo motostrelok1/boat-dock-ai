@@ -1,6 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { Simulation } from '../src/simulation.js';
+import { planHeadingRoute } from '../src/headingPlanner.js';
 import { NeuralNetwork } from '../src/neuralNetwork.js';
 
 globalThis.localStorage = {
@@ -162,4 +163,17 @@ test('blocked route returns empty visualization path',()=>{
  const s=fresh();s.clearWaypoints();s.clearAvoidZones();s.boat.x=100;s.boat.y=500;
  s.avoidZones=[{x:100,y:500,radius:30}];
  const r=s.getRouteReachability();assert.equal(r.reachable,false);assert.deepEqual(r.path,[]);
+});
+
+test('heading planner respects turn rate and avoids hazards',()=>{
+ const s=fresh();s.clearWaypoints();s.clearAvoidZones();s.boat.x=150;s.boat.y=500;s.boat.heading=0;
+ s.entryX=390;s.gateY=500;s.islandX=450;s.islandY=50;s.islandH=300;s.islandW=150;
+ const result=planHeadingRoute(s,{maxNodes:4000});assert.equal(result.reachable,true);
+ assert.ok(result.path.length>3);
+ for(const p of result.path)assert.ok(Math.hypot(p.x-150,p.y-500)>=0);
+});
+test('heading planner rejects obstructed starting point',()=>{
+ const s=fresh();s.clearWaypoints();s.clearAvoidZones();s.boat.x=100;s.boat.y=500;
+ s.avoidZones=[{x:100,y:500,radius:35}];
+ assert.equal(planHeadingRoute(s).reachable,false);
 });

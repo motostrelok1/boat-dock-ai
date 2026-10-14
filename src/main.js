@@ -11,6 +11,7 @@ const renderer = new Renderer(canvas, 1800, 1000);
 const simulation = new Simulation(1800, 1000);
 
 const hudSpeed = document.getElementById('hud-speed');
+const hudTargetSpeed = document.getElementById('hud-target-speed');
 const hudHeading = document.getElementById('hud-heading');
 const hudRudder = document.getElementById('hud-rudder');
 const hudScore = document.getElementById('hud-score');
@@ -150,6 +151,7 @@ canvas.addEventListener('click', (e) => {
 function updateHUD() {
   const state = simulation.boat.getState();
   hudSpeed.textContent = state.speed.toFixed(1);
+  hudTargetSpeed.textContent = state.targetSpeed.toFixed(1);
   hudHeading.textContent = (state.heading * 180 / Math.PI).toFixed(1);
   hudRudder.textContent = (state.rudderAngle * 45).toFixed(1);
   hudScore.textContent = simulation.score.toFixed(1);

@@ -594,9 +594,16 @@ export class Simulation {
     const route=this.routeGuidance;
     if(route.path.length<2)return null;
     const b=this.boat;
+    const mandatory = this.currentWaypointIndex < this.waypoints.length
+      ? this.waypoints[this.currentWaypointIndex]
+      : !this.dockPreparationPassed ? this.getDockPreparationPoint() : null;
+    const requiredIndex = mandatory ? route.path.findIndex(p=>
+      Math.hypot(p.x-mandatory.x,p.y-mandatory.y)<0.01) : -1;
     // Progress along segments (not nearest vertex), never reverse on a hairpin.
     let bestIndex=route.index,bestDist=Infinity,bestT=0;
-    for(let i=route.index;i<route.path.length-1;i++){
+    const lastSegment=requiredIndex>0 ? Math.max(0,requiredIndex-1) : route.path.length-2;
+    route.index=Math.min(route.index,lastSegment);
+    for(let i=route.index;i<=lastSegment;i++){
       const a=route.path[i],c=route.path[i+1];
       const dx=c.x-a.x,dy=c.y-a.y,len2=dx*dx+dy*dy;
       const t=len2?Math.max(0,Math.min(1,((b.x-a.x)*dx+(b.y-a.y)*dy)/len2)):0;
@@ -611,13 +618,19 @@ export class Simulation {
     let from={x:route.path[i].x+(route.path[i+1].x-route.path[i].x)*(i===bestIndex?bestT:0),
       y:route.path[i].y+(route.path[i+1].y-route.path[i].y)*(i===bestIndex?bestT:0)};
     let target=route.path.at(-1);
-    for(;i<route.path.length-1;i++){
+    for(;i<route.path.length-1 && (requiredIndex<0 || i<requiredIndex);i++){
       const next=route.path[i+1],length=Math.hypot(next.x-from.x,next.y-from.y);
       if(length>=ahead){const t=ahead/(length||1);
         target={x:from.x+(next.x-from.x)*t,y:from.y+(next.y-from.y)*t};break;
       }
       ahead-=length;from=next;
     }
+    // Close to an uncaptured mandatory point: steer to its actual center.
+    // Never turn toward the next leg before checkWaypoints has accepted it.
+    if(mandatory && Math.hypot(mandatory.x-b.x,mandatory.y-b.y)<90)
+      target={x:mandatory.x,y:mandatory.y};
+    else if(requiredIndex>=0 && Math.hypot(target.x-mandatory.x,target.y-mandatory.y)<1)
+      target={x:mandatory.x,y:mandatory.y};
     const bearing=Math.atan2(target.y-b.y,target.x-b.x);
     const error=this.normalizeAngle(bearing-b.heading);
     return {rudder:Math.max(-1,Math.min(1,error*2.2)),target,deviation:bestDist};

@@ -73,3 +73,40 @@ test('random avoid zones are reproducible for deterministic layout',()=>{
   s.randomizeLayout(rng);
   assert.equal(JSON.stringify(s.avoidZones),first);
 });
+
+
+test('random waypoints and random avoid zones never touch',()=>{
+  const s=fresh();
+  s.randomWaypointEnabled=true;s.randomWaypointCount=5;
+  s.randomAvoidEnabled=true;s.randomAvoidCount=10;s.randomAvoidRadius=30;
+  for(let i=0;i<8;i++){
+    s.reset(null,true);
+    assert.equal(s.getLayoutConflict(),null);
+    for(const wp of s.waypoints) for(const z of s.avoidZones)
+      assert.ok(s.zoneClearance(z,wp.x,wp.y,s.boat.length/2)>0);
+  }
+});
+test('overlapping manual zone triggers safe 10-second movement and removal',()=>{
+  const s=fresh();
+  s.clearWaypoints();s.clearAvoidZones();
+  s.boat.x=100;s.boat.y=100;s.boat.heading=0;
+  s.addWaypoint(800,450);
+  s.addAvoidZone(800,450,20);
+  assert.ok(s.holding);
+  assert.equal(s.boat.speed,10);
+  for(let i=0;i<200;i++)s.update(0.05);
+  assert.equal(s.holding,null);
+  assert.equal(s.avoidZones.length,0);
+  assert.equal(s.boat.speed,30);
+  assert.equal(s.finished,false);
+});
+test('no safe holding loop removes zones without sending boat through danger',()=>{
+  const s=fresh();
+  s.clearWaypoints();s.clearAvoidZones();
+  s.boat.x=25;s.boat.y=25;
+  s.addWaypoint(400,400);
+  s.addAvoidZone(400,400,20);
+  assert.equal(s.holding,null);
+  assert.equal(s.avoidZones.length,0);
+  assert.match(s.notice,/нет места для ожидания/);
+});

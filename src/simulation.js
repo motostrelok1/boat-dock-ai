@@ -63,12 +63,21 @@ export class Simulation {
     this.randomAvoidEnabled = false;
     this.randomAvoidCount = 2;
     this.randomAvoidRadius = 20;
+    this.randomWaypointEnabled = false;
+    this.randomWaypointCount = 3;
+    this.safetyMargin = 12;
+    this.holding = null;
+    this.notice = '';
     
     this.randomizeLayout();
     this.loadBestBrain();
   }
   
   randomizeLayout(rng = Math.random) {
+    this.holding = null;
+    this.boat.speed = 30;
+    this.notice = '';
+    if (this.randomAvoidEnabled) this.avoidZones = [];
     this.islandW = 120 + rng() * 80;
     this.islandH = 180 + rng() * 120;
     this.islandX = this.width - this.islandW + 20;
@@ -95,12 +104,103 @@ export class Simulation {
     
     this.currentWaypointIndex = 0;
     this.waypoints.forEach(wp => wp.passed = false);
+    if (this.randomWaypointEnabled) this.generateRandomWaypoints(rng);
     if (this.randomAvoidEnabled) this.generateRandomAvoidZones(rng);
+    this.checkLayoutSafety();
   }
   
+  // Check the boundary of every danger zone, including hull clearance.
+  zoneClearance(zone, x, y, radius = 0) {
+    return Math.hypot(x - zone.x, y - zone.y) - zone.radius - radius - this.safetyMargin;
+  }
+
+  isValidWaypoint(x, y) {
+    const hull = this.boat.length / 2;
+    return x >= hull + this.safetyMargin && y >= hull + this.safetyMargin &&
+      x <= this.entryX - hull - this.safetyMargin &&
+      y <= this.height - hull - this.safetyMargin &&
+      !this.isOverIsland(x,y) &&
+      this.avoidZones.every(z => this.zoneClearance(z,x,y,hull) > 0) &&
+      Math.hypot(x-this.boat.x,y-this.boat.y) > hull + 10 &&
+      this.waypoints.every(wp => Math.hypot(x-wp.x,y-wp.y)>hull*2+this.safetyMargin);
+  }
+
+  generateRandomWaypoints(rng = Math.random) {
+    this.clearWaypoints();
+    const count = this.randomWaypointCount;
+    const lo = this.boat.length/2 + this.safetyMargin + 5;
+    const hi = this.entryX - lo;
+    for(let i=0;i<count;i++){
+      for(let attempt=0;attempt<300;attempt++){
+        const x=lo+rng()*Math.max(1,hi-lo);
+        const y=lo+rng()*Math.max(1,this.height-2*lo);
+        if(this.isValidWaypoint(x,y)) { this.addWaypoint(x,y);break; }
+      }
+    }
+    if(this.waypoints.length<count) this.notice = 'Не все случайные точки помещаются безопасно';
+    return this.waypoints.length;
+  }
+
+  getLayoutConflict() {
+    for (const wp of this.waypoints) {
+      for (const z of this.avoidZones) {
+        if (this.zoneClearance(z,wp.x,wp.y,this.boat.length/2) <= 0) return 'Точка маршрута пересекает запретную зону';
+      }
+    }
+    for(let i=0;i<this.avoidZones.length;i++){
+      const a=this.avoidZones[i];
+      for(let j=i+1;j<this.avoidZones.length;j++){
+        const b=this.avoidZones[j];
+        if(Math.hypot(a.x-b.x,a.y-b.y)<=a.radius+b.radius+this.safetyMargin) return 'Запретные зоны пересекаются';
+      }
+    }
+    return null;
+  }
+
+  // A holding circle is only allowed when its entire swept path stays safe.
+  findSafeHoldingTurn() {
+    const speed=10, dt=0.05, steps=200;
+    for(const rudder of [-1,1]){
+      let {x,y,heading}=this.boat;
+      let safe=true;
+      for(let i=0;i<steps;i++){
+        heading+=rudder*this.boat.maxTurnRate*dt;
+        x+=Math.cos(heading)*speed*dt;
+        y+=Math.sin(heading)*speed*dt;
+        const hull=this.boat.length/2+this.safetyMargin;
+        if(x<hull||x>this.width-hull||y<hull||y>this.height-hull||
+          this.isOverIsland(x,y)||
+          this.avoidZones.some(z=>this.zoneClearance(z,x,y,this.boat.length/2)<=0)){
+          safe=false;break;
+        }
+      }
+      if(safe) return rudder;
+    }
+    return null;
+  }
+
+  checkLayoutSafety() {
+    if(this.holding) return;
+    const conflict=this.getLayoutConflict();
+    if(!conflict) return;
+    // During batch training, report invalid layouts without running wall-clock waits.
+    if(this.trainingActive) { this.notice=conflict;return; }
+    const rudder=this.findSafeHoldingTurn();
+    if(rudder===null) {
+      // Never move toward an obstacle when no physically safe waiting loop exists.
+      this.clearAvoidZones();
+      this.notice='Небезопасная карта: нет места для ожидания, запреты сняты немедленно';
+      return;
+    }
+    this.holding={remaining:10,rudder,previousSpeed:this.boat.speed};
+    this.boat.speed=10;
+    this.notice=`⚠️ ${conflict}. Ожидание 10 с на скорости 10 px/с`;
+  }
+
   // === Waypoints ===
   addWaypoint(x, y) {
     this.waypoints.push({ x, y, passed: false });
+    if (!this.randomWaypointEnabled) this.checkLayoutSafety();
   }
   
   removeWaypointAt(x, y) {
@@ -131,6 +231,7 @@ export class Simulation {
   // === Avoid zones ===
   addAvoidZone(x, y, radius) {
     this.avoidZones.push({ x, y, radius });
+    this.checkLayoutSafety();
   }
   
   removeAvoidZoneAt(x, y) {
@@ -160,7 +261,6 @@ export class Simulation {
     this.avoidZones = [];
     const radius = this.randomAvoidRadius;
     const count = this.randomAvoidCount;
-    const clearance = radius + this.boat.width + 10;
     for (let i = 0; i < count; i++) {
       let placed = false;
       for (let attempt = 0; attempt < 200 && !placed; attempt++) {
@@ -168,13 +268,14 @@ export class Simulation {
         const y = radius + 20 + rng() * (this.height - 2 * (radius + 20));
         if (Math.hypot(x - this.boat.x, y - this.boat.y) < radius + 60) continue;
         if (Math.hypot(x - this.entryX, y - this.gateY) < radius + 75) continue;
-        if (this.waypoints.some(wp => Math.hypot(x - wp.x, y - wp.y) < radius + 15)) continue;
-        if (this.avoidZones.some(zone => Math.hypot(x-zone.x,y-zone.y) < 2*radius+15)) continue;
+        if (this.waypoints.some(wp => this.zoneClearance({x,y,radius},wp.x,wp.y,this.boat.length/2) <= 0)) continue;
+        if (this.avoidZones.some(zone => Math.hypot(x-zone.x,y-zone.y) <= zone.radius+radius+this.safetyMargin)) continue;
         if (this.isOverIsland(x,y)) continue;
         this.avoidZones.push({x,y,radius});
         placed = true;
       }
     }
+    if(this.avoidZones.length<count) this.notice='Не все запретные зоны помещаются безопасно';
     return this.avoidZones.length;
   }
 
@@ -238,6 +339,20 @@ export class Simulation {
   
   update(dt) {
     if (!this.running || this.finished) return;
+    if(this.holding){
+      const slice=Math.min(dt,this.holding.remaining);
+      this.boat.speed=10;
+      this.boat.update(slice,this.holding.rudder);
+      this.time+=slice;
+      this.holding.remaining-=slice;
+      if(this.holding.remaining<=0){
+        this.boat.speed=this.holding.previousSpeed;
+        this.holding=null;
+        this.clearAvoidZones();
+        this.notice='✅ 10 секунд прошло. Запретные зоны удалены, продолжаем маршрут';
+      }
+      return;
+    }
     
     this.time += dt;
     
@@ -422,6 +537,9 @@ export class Simulation {
       this.randomizeLayout();
     }
     this.time = 0;
+    this.holding = null;
+    this.notice = '';
+    this.boat.speed = 30;
     this.finished = false;
     this.running = true;
     this.score = 0;

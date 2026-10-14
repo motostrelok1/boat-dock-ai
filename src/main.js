@@ -76,7 +76,11 @@ btnAvoidMode.addEventListener('click', () => {
   setClickMode(clickMode === 'avoid' ? 'none' : 'avoid');
 });
 
-btnClearWaypoints.addEventListener('click', () => simulation.clearWaypoints());
+btnClearWaypoints.addEventListener('click', () => {
+  chkRandomWaypoints.checked=false;
+  simulation.randomWaypointEnabled=false;
+  simulation.clearWaypoints();
+});
 btnClearAvoid.addEventListener('click', () => {
   chkRandomAvoid.checked = false;
   simulation.randomAvoidEnabled = false;
@@ -85,7 +89,10 @@ btnClearAvoid.addEventListener('click', () => {
 function syncRandomAvoid() {
   simulation.randomAvoidCount = Number(avoidCount.value);
   simulation.randomAvoidRadius = Number(avoidRadius.value);
-  if (simulation.randomAvoidEnabled) simulation.generateRandomAvoidZones();
+  if (simulation.randomAvoidEnabled) {
+    simulation.generateRandomAvoidZones();
+    simulation.checkLayoutSafety();
+  }
 }
 chkRandomAvoid.addEventListener('change', () => {
   simulation.randomAvoidEnabled = chkRandomAvoid.checked;
@@ -96,28 +103,18 @@ avoidCount.addEventListener('change', syncRandomAvoid);
 avoidRadius.addEventListener('change', syncRandomAvoid);
 
 function generateRandomWaypoints() {
-  simulation.clearWaypoints();
-  const count = parseInt(waypointCount.value, 10);
-  // Точки маршрута только левее линии входа: правее неё лежит остров/фарватер,
-  // и точка там превращается в ловушку (недостижима без «незачёта»).
-  const maxX = Math.max(80, simulation.entryX - 40);
-  for (let i = 0; i < count; i++) {
-    let x, y, attempts = 0;
-    do {
-      x = 40 + Math.random() * (maxX - 40);
-      y = 40 + Math.random() * (simulation.height - 80);
-      attempts++;
-    } while (simulation.isOverIsland(x, y) && attempts < 100);
-    simulation.addWaypoint(x, y);
-  }
+  simulation.randomWaypointEnabled = chkRandomWaypoints.checked;
+  simulation.randomWaypointCount = Number(waypointCount.value);
+  if (chkRandomWaypoints.checked) simulation.generateRandomWaypoints();
 }
+waypointCount.addEventListener('change', () => {
+  if(chkRandomWaypoints.checked) generateRandomWaypoints();
+});
 
 chkRandomWaypoints.addEventListener('change', (e) => {
-  if (e.target.checked) {
-    generateRandomWaypoints();
-  } else {
-    simulation.clearWaypoints();
-  }
+  simulation.randomWaypointEnabled = e.target.checked;
+  if (e.target.checked) generateRandomWaypoints();
+  else simulation.clearWaypoints();
 });
 
 canvas.addEventListener('click', (e) => {
@@ -223,6 +220,15 @@ function render() {
   if (simulation.avoidZones.length > 0) {
     ctx.fillStyle = '#ff5252';
     ctx.fillText(`🚫 Запретов: ${simulation.avoidZones.length}`, 20, 110);
+  }
+
+  if (simulation.holding || simulation.notice) {
+    ctx.fillStyle = simulation.holding ? '#ffbf47' : '#e0f7fa';
+    ctx.font = 'bold 16px sans-serif';
+    const message = simulation.holding
+      ? `⚠️ Безопасное ожидание: ${Math.ceil(simulation.holding.remaining)} с · 10 px/с`
+      : simulation.notice;
+    ctx.fillText(message, 20, 160);
   }
 
   const timeRatio = simulation.time / simulation.maxTime;

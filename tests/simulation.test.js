@@ -314,3 +314,22 @@ test('route speed recommendation uses course and distance',()=>{
  s.boat.heading=Math.PI/2;assert.equal(s.recommendSpeed(),10);
  s.boat.heading=0;s.entryX=170;assert.equal(s.recommendSpeed(),20);
 });
+
+test('AI obstacle guidance selects detour rather than direct forbidden chord',()=>{
+ const s=fresh();s.clearWaypoints();s.clearAvoidZones();
+ s.boat.x=150;s.boat.y=500;s.boat.heading=0;
+ s.entryX=800;s.gateY=500;s.islandX=1100;s.islandY=50;s.islandW=120;s.islandH=200;
+ s.avoidZones=[{x:470,y:500,radius:75}];
+ const g=s.getAvoidanceGuidance(0.05);
+ assert.ok(g);
+ assert.ok(s.routeGuidance.path.length>2);
+ assert.ok(Number.isFinite(g.rudder));
+});
+test('avoidance guidance invalidates cached route when an obstacle changes',()=>{
+ const s=fresh();s.clearWaypoints();s.clearAvoidZones();
+ s.boat.x=150;s.boat.y=500;s.entryX=800;s.gateY=500;s.islandX=1100;s.islandY=50;
+ s.avoidZones=[{x:470,y:500,radius:35}];
+ s.getAvoidanceGuidance(0.05);const first=s.routeGuidance.key;
+ s.avoidZones[0].radius=55;s.getAvoidanceGuidance(0.05);
+ assert.notEqual(first,s.routeGuidance.key);
+});

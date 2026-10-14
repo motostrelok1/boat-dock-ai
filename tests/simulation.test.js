@@ -1,6 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { Simulation } from '../src/simulation.js';
+import { minimumTurnRadius, validateTurnRadius } from '../src/turnRadius.js';
 import { smoothSafeRoute } from '../src/routeSmoothing.js';
 import { planHeadingRoute } from '../src/headingPlanner.js';
 import { NeuralNetwork } from '../src/neuralNetwork.js';
@@ -247,4 +248,20 @@ test('smoothing preserves a corner if rounding would cross a hazard',()=>{
  const original=[{x:100,y:200},{x:250,y:200},{x:250,y:350}];
  const result=smoothSafeRoute(s,original);
  assert.ok(result.some(p=>p.x===250&&p.y===200));
+});
+
+test('minimum turning radius obeys speed and max turn rate',()=>{
+ const s=fresh();assert.ok(Math.abs(minimumTurnRadius(s.boat,30)-25)<0.001);
+ assert.ok(Math.abs(minimumTurnRadius(s.boat,10)-10/1.2)<0.001);
+});
+test('turn validation accepts straight path and rejects sharp corner',()=>{
+ const boat=fresh().boat;
+ assert.equal(validateTurnRadius([{x:0,y:0},{x:100,y:0},{x:200,y:0}],boat,30).valid,true);
+ const tight=[{x:0,y:0},{x:4,y:0},{x:4,y:4}];
+ assert.equal(validateTurnRadius(tight,boat,30).valid,false);
+});
+test('turn validation accepts sampled gentle circular arc',()=>{
+ const boat=fresh().boat;
+ const arc=Array.from({length:15},(_,i)=>({x:80*Math.cos(i*0.08),y:80*Math.sin(i*0.08)}));
+ assert.equal(validateTurnRadius(arc,boat,30).valid,true);
 });

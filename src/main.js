@@ -173,6 +173,7 @@ function updateHUD() {
 
 let lastRouteKey = '';
 let plannedRoute = [];
+let routeStatus = '';
 let lastPlanTime = -Infinity;
 function routeDistance(path, position) {
   if (!path.length) return Infinity;
@@ -199,10 +200,21 @@ function getPlannedRoute() {
     lastRouteKey=key;
     lastPlanTime=simulation.time;
     const connectivity=simulation.getRouteReachability();
-    const result=connectivity.reachable ? planHeadingRoute(simulation) : connectivity;
-    // Preserve the previous plan on a transient failed recalculation if the map did not change.
-    if(result.reachable) plannedRoute=result.path;
-    else if(changed) plannedRoute=[];
+    if (!connectivity.reachable) {
+      plannedRoute = [];
+      routeStatus = 'Маршрут заблокирован';
+    } else {
+      const result = planHeadingRoute(simulation);
+      // The heading-aware search is bounded and can fail on multi-point routes.
+      // Fall back only to the verified collision-free geometric route, never to a straight chord.
+      if (result.reachable) {
+        plannedRoute = result.path;
+        routeStatus = 'Маршрут с учётом поворотов';
+      } else {
+        plannedRoute = connectivity.path;
+        routeStatus = 'Предварительный маршрут — повороты не проверены';
+      }
+    }
   }
   // Hide only the already travelled prefix; keep the planned geometry stable.
   if(plannedRoute.length<2)return [];
@@ -225,6 +237,13 @@ function render() {
   renderer.drawWaypoints(simulation.waypoints, simulation.currentWaypointIndex);
   renderer.drawAvoidZones(simulation.avoidZones);
   renderer.drawPlannedRoute(getPlannedRoute());
+  if (routeStatus) {
+    renderer.ctx.save();
+    renderer.ctx.font = 'bold 13px sans-serif';
+    renderer.ctx.fillStyle = routeStatus.startsWith('Предварительный') ? '#ffdc39' : '#80deea';
+    renderer.ctx.fillText(routeStatus, 20, 190);
+    renderer.ctx.restore();
+  }
   renderer.drawTrail(simulation.boat.trail);
   renderer.drawBoat(simulation.boat);
   renderer.drawPrediction(simulation.boat, simulation.boat.getPrediction(3));

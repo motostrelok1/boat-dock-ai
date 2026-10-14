@@ -170,6 +170,23 @@ function updateHUD() {
   hudLifetime.textContent = Math.max(0, simulation.maxTime - simulation.time).toFixed(1);
 }
 
+let lastRouteKey = '';
+let plannedRoute = [];
+function getPlannedRoute() {
+  const key = JSON.stringify({
+    start: [simulation.boat.trail[0]?.x ?? simulation.boat.x, simulation.boat.trail[0]?.y ?? simulation.boat.y],
+    targets: simulation.waypoints.map(p => [p.x,p.y]),
+    zones: simulation.avoidZones.map(z => [z.x,z.y,z.radius]),
+    dock: [simulation.entryX,simulation.gateY,simulation.islandX,simulation.islandY]
+  });
+  if(key !== lastRouteKey){
+    lastRouteKey=key;
+    const result=simulation.getRouteReachability();
+    plannedRoute=result.reachable ? result.path : [];
+  }
+  return plannedRoute;
+}
+
 function render() {
   renderer.clear();
   renderer.drawGrid();
@@ -180,6 +197,7 @@ function render() {
   );
   renderer.drawWaypoints(simulation.waypoints, simulation.currentWaypointIndex);
   renderer.drawAvoidZones(simulation.avoidZones);
+  renderer.drawPlannedRoute(getPlannedRoute());
   renderer.drawTrail(simulation.boat.trail);
   renderer.drawBoat(simulation.boat);
   renderer.drawPrediction(simulation.boat, simulation.boat.getPrediction(3));

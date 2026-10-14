@@ -33,6 +33,21 @@ export class Renderer {
     this.ctx.fillRect(0, 0, this.width, this.height);
   }
   
+  drawPlannedRoute(path) {
+    if (!path || path.length < 2) return;
+    const ctx = this.ctx;
+    ctx.save();
+    ctx.beginPath();
+    ctx.moveTo(path[0].x, path[0].y);
+    for (const point of path.slice(1)) ctx.lineTo(point.x, point.y);
+    ctx.strokeStyle = '#ffdc39';
+    ctx.lineWidth = 3;
+    ctx.setLineDash([12, 8]);
+    ctx.lineJoin = 'round';
+    ctx.stroke();
+    ctx.restore();
+  }
+
   drawGrid() {
     this.ctx.strokeStyle = 'rgba(0, 229, 255, 0.05)';
     this.ctx.lineWidth = 1;
